@@ -515,6 +515,7 @@ async function viewCust(key) {
       h("span", { class: "chip" }, `CALL HOURS ${((ct.permitted_call_window_local || [])[0]) || "07:00"}–${((ct.permitted_call_window_local || [])[1]) || "21:00"} ${ct.time_zone ? "(" + ct.time_zone.split("/").pop().replace("_", " ") + " time)" : ""}`)),
   ];
 
+  const contactRow = banners.pop();                      // the "how we may contact" chips go below the AI strip
   if ((doc._overlay || []).length) banners.unshift(h("div", { class: "banner hard" }, h("b", null, "FROM A CONVERSATION LOGGED IN THIS APP"),
     h("ul", null, doc._overlay.map((e) => h("li", null, overlayText(e))))));
   const caseSel = cases.length > 1 ? h("select", { "aria-label": "Case", onchange: (e) => route(e.target.value) },
@@ -548,7 +549,20 @@ async function viewCust(key) {
 
   // middle: NBA + approval
   const peersBox = h("div", null, loading("SIMILAR CUSTOMERS"));
-  const middle = h("div", { class: "grid" }, rec ? nbaPanel(rec, doc) : panel("NEXT BEST ACTION", h("div", { class: "muted" }, "No case.")),
+  // AI next best action: the headline of the page. The button and the draft live here; the rules panel below is unchanged.
+  const hero = { cta: h("div"), out: h("div", { class: "ai-out" }) };
+  if (!rec) hero.cta.append(h("button", { class: "ai-cta", disabled: true }, "NO CASE TO ASK ABOUT"));
+  const heroEl = h("section", { class: "ai-hero", "aria-label": "AI next best action" },
+    h("div", { class: "ai-hero-top" },
+      h("div", null,
+        h("div", { class: "ai-tag" }, h("span", { class: "spark-i", "aria-hidden": "true" }, "\u2726"), "AI NEXT BEST ACTION", h("span", { class: "ai-new" }, "NEW")),
+        h("div", { class: "ai-hero-t" }, "What is the best next step with this customer?"),
+        h("div", { class: "ai-hero-s" }, "One click drafts the step, the reasons with policy references, talking points and what to watch out for. The contact rules still apply, and a person approves.")),
+      h("div", { class: "ai-hero-r" }, hero.cta,
+        h("button", { class: "btn log-cta", disabled: caseId ? null : true, onclick: () => route("LOG " + caseId), title: "Paste a transcript or your notes; the system pulls out promises, hardship and follow-ups for you to confirm" },
+          state.convDrafts && state.convDrafts[caseId] ? "RESUME CONVERSATION DRAFT" : "+ LOG A CONVERSATION"))),
+    hero.out);
+  const middle = h("div", { class: "grid" }, rec ? nbaPanel(rec, doc, hero) : panel("NEXT BEST ACTION", h("div", { class: "muted" }, "No case.")),
     panel("SIMILAR CUSTOMERS", peersBox, "other customers' names are not shown"),
     panel("DECISIONS ON THIS CASE", decisionHistory(rec)));
   if (caseId) api(`/cases/${caseId}/peers`).then((d) => peersBox.replaceChildren(peersEl(d))).catch((e) => peersBox.replaceChildren(errorBox(e)));
@@ -596,7 +610,7 @@ async function viewCust(key) {
         h("div", null, (c.followups[cp.conversation_id] || []).map((x) => h("span", { class: "chip " + (x.status === "rejected" ? "" : x.status === "pending" ? "yel" : "grn") }, `${CONV_TYPE[x.type] || fmt.label(x.type)}${x.status === "pending" ? " · PENDING" : x.status === "rejected" ? " · REJECTED" : ""}`))))); })))
     : h("div", { class: "muted" }, "None yet."))).catch((e) => convBox.replaceChildren(errorBox(e)));
 
-  setView("cust", title(`${p.first_name || ""} ${p.last_name || ""}`.trim() || doc._id, `${doc._id} · CRM ${doc.master_crm_id} · ${ct.city || ""} ${ct.province_code || ""}${ct.postal_area ? " · area " + ct.postal_area : ""}${wk.sector ? " · " + wk.sector : ""}`), caseSel, ...banners,
+  setView("cust", title(`${p.first_name || ""} ${p.last_name || ""}`.trim() || doc._id, `${doc._id} · CRM ${doc.master_crm_id} · ${ct.city || ""} ${ct.province_code || ""}${ct.postal_area ? " · area " + ct.postal_area : ""}${wk.sector ? " · " + wk.sector : ""}`), caseSel, ...banners, heroEl, contactRow,
     h("div", { class: "grid g-3" }, left, middle, right),
     doc.identity && doc.identity.note ? h("p", { class: "note" }, doc.identity.note) : null);
 }
@@ -652,7 +666,7 @@ function riskEl(r) {
     h("div", { class: "note" }, "▲ makes a missed payment more likely · ▼ makes it less likely"));
 }
 
-function nbaPanel(rec, doc) {
+function nbaPanel(rec, doc, hero) {
   const box = h("div", { class: "nba" });
   const conflictsEl = h("div");
   const msg = h("div");
@@ -713,15 +727,20 @@ function nbaPanel(rec, doc) {
       submit("reject", { reason: [rr.value, rt.value.trim()].filter(Boolean).join(": "), reason_code: rr.value }); } }, "REJECT WITH REASON"))));
 
   // AI suggestion (draft): on demand only; it never replaces the rules panel and can only pre-fill the CHANGE IT form
-  const aiHolder = h("div");
-  const aiBtn = h("button", { class: "btn", tabindex: 0, title: "A draft from an AI model to help you plan the contact. The rules-based step and a person's approval still apply." }, "ASK AI FOR A NEXT STEP");
+  const aiHolder = hero ? hero.out : h("div");
+  const AI_LABEL = "ASK AI FOR THE NEXT BEST ACTION";
+  const aiBtn = h("button", { class: hero ? "ai-cta" : "btn", tabindex: 0, title: "A draft from an AI model to help you plan the contact. The rules-based step and a person's approval still apply." },
+    h("span", { class: "spark-i", "aria-hidden": "true" }, "\u2726"), h("span", { class: "ai-cta-l" }, AI_LABEL));
+  const aiBusy = (on) => { aiBtn.disabled = on; aiBtn.classList.toggle("busy", on); aiBtn.querySelector(".ai-cta-l").textContent = on ? "ASKING THE AI…" : AI_LABEL; };
+  if (hero) hero.cta.append(aiBtn);
   async function askAi(refresh) {
-    aiBtn.disabled = true;
-    aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", h("div", { class: "loading" }, "Asking the AI…")));
+    aiBusy(true);
+    aiHolder.replaceChildren(h("div", { class: "ai-result" }, h("div", { class: "loading" }, "Asking the AI… this takes a few seconds.")));
+    if (hero) aiHolder.scrollIntoView({ block: "nearest", behavior: "smooth" });
     let r;
     try { r = await api(`/cases/${rec.case_id}/ai-nba`, { method: "POST", body: { refresh: !!refresh } }); }
-    catch (e) { aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", errorBox(e))); aiBtn.disabled = false; return; }
-    aiBtn.disabled = false;
+    catch (e) { aiHolder.replaceChildren(h("div", { class: "ai-result" }, errorBox(e))); aiBusy(false); return; }
+    aiBusy(false);
     const s = r.suggestion, st = s.suggested_step, ai = r.source === "ai", m = r.meta || {};
     const chan = { call: "Phone call", sms: "Text message", email: "Email", letter: "Letter", none: "No contact" };
     const list = (items, cls) => items && items.length ? h("ul", { class: "reasons " + (cls || "") }, items.map((x) => typeof x === "string" ? h("li", null, x)
@@ -737,23 +756,28 @@ function nbaPanel(rec, doc) {
       f.reason.focus();
     } }, "USE AS EDIT") : null;
     const again = ["team_lead", "admin"].includes(state.role) ? h("button", { class: "btn", onclick: () => askAi(true) }, "ASK AGAIN") : null;
-    aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", h("div", { class: "nba", title: ai ? `model ${m.model} · prompt v${m.prompt_version}${m.cached ? " · from cache" : ""}` : "rules-based" },
-      h("div", { class: ai ? "note" : "banner hard" }, r.notice),
-      h("div", { class: "action ai" }, st.title),
-      h("div", { class: "kv" },
-        h("span", { class: "k" }, "How"), h("span", { class: "v" }, chan[st.channel] || st.channel || "—"),
-        h("span", { class: "k" }, "When"), h("span", { class: "v" }, st.when || "—"),
-        h("span", { class: "k" }, "Amount to ask for"), h("span", { class: "v" }, st.amount !== null && st.amount !== undefined ? fmt.money(st.amount) : "—"),
-        h("span", { class: "k" }, "Hardship option"), h("span", { class: "v" }, st.programme || "—")),
-      ai ? h("div", { class: s.agrees_with_rules ? "good" : "warn", style: "margin-top:6px" }, s.agrees_with_rules ? "Agrees with the rules" : "Differs from the rules: " + (s.difference_from_rules || "")) : null,
-      (s.why || []).length ? h("div", { class: "muted", style: "margin-top:8px" }, "WHY") : null, list(s.why),
-      (s.talking_points || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "TALKING POINTS") : null, list(s.talking_points),
-      (s.watch_outs || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "WATCH OUT FOR") : null, list(s.watch_outs, "safeguards"),
-      (r.conflicts || []).length ? h("div", null, h("div", { class: "bad", style: "margin-top:6px" }, "PROBLEMS with this suggestion (the contact rules still apply)"), list(r.conflicts, "conflicts")) : null,
-      (r.removed || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "Removed because not supported by the data: " + r.removed.join(" · ")) : null,
-      h("div", { class: "bar" }, useBtn, again,
-        h("span", { class: "note" }, ai ? `Draft only. ${m.cached ? "From cache. " : ""}${m.calls_today ?? 0} of ${m.daily_cap ?? "?"} AI calls used today.` : "Standard recommendation (no AI)."))),
-      ai ? "AI draft · a person decides" : "standard recommendation"));
+    aiHolder.replaceChildren(h("div", { class: "ai-result nba" + (ai ? "" : " std"), title: ai ? `model ${m.model} · prompt v${m.prompt_version}${m.cached ? " · from cache" : ""}` : "rules-based" },
+      h("div", { class: "ai-result-h" }, h("span", { class: "ai-badge" }, ai ? "AI DRAFT · A PERSON DECIDES" : "STANDARD RECOMMENDATION"),
+        h("span", { class: ai ? "note" : "warn" }, r.notice)),
+      h("div", { class: "ai-cols" },
+        h("div", null,
+          h("div", { class: "muted" }, "SUGGESTED STEP"),
+          h("div", { class: "action ai" }, st.title),
+          h("div", { class: "kv" },
+            h("span", { class: "k" }, "How"), h("span", { class: "v" }, chan[st.channel] || st.channel || "—"),
+            h("span", { class: "k" }, "When"), h("span", { class: "v" }, st.when || "—"),
+            h("span", { class: "k" }, "Amount to ask for"), h("span", { class: "v" }, st.amount !== null && st.amount !== undefined ? fmt.money(st.amount) : "—"),
+            h("span", { class: "k" }, "Hardship option"), h("span", { class: "v" }, st.programme || "—")),
+          ai ? h("div", { class: s.agrees_with_rules ? "good" : "warn", style: "margin-top:6px" }, s.agrees_with_rules ? "Agrees with the rules" : "Differs from the rules: " + (s.difference_from_rules || "")) : null,
+          h("div", { class: "bar" }, useBtn, again,
+            h("span", { class: "note" }, ai ? `Draft only. ${m.cached ? "From cache. " : ""}${m.calls_today ?? 0} of ${m.daily_cap ?? "?"} AI calls used today.` : "Standard recommendation (no AI)."))),
+        h("div", null,
+          (s.why || []).length ? h("div", { class: "muted" }, "WHY") : null, list(s.why),
+          (r.conflicts || []).length ? h("div", null, h("div", { class: "bad", style: "margin-top:6px" }, "PROBLEMS with this suggestion (the contact rules still apply)"), list(r.conflicts, "conflicts")) : null,
+          (r.removed || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "Removed because not supported by the data: " + r.removed.join(" · ")) : null),
+        h("div", null,
+          (s.talking_points || []).length ? h("div", { class: "muted" }, "TALKING POINTS") : null, list(s.talking_points),
+          (s.watch_outs || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "WATCH OUT FOR") : null, list(s.watch_outs, "safeguards")))));
   }
   aiBtn.addEventListener("click", () => askAi(false));
   if (new URLSearchParams(location.search).get("ai") === "1") setTimeout(() => askAi(false), 0);      // demo link: open the AI draft straight away
@@ -780,13 +804,14 @@ function nbaPanel(rec, doc) {
     t && t.notes && t.notes.length ? h("div", { class: "note" }, t.notes.join(" ")) : null,
     conflictsEl,
     h("div", { class: "bar" },
-      aiBtn,
+      hero ? h("button", { class: "btn ai-mini", onclick: () => askAi(false), title: "Opens the AI draft at the top of the page" }, "\u2726 ASK AI") : aiBtn,
       h("button", { class: "btn", onclick: () => { editForm.hidden = !editForm.hidden; rejectForm.hidden = true; } }, "CHANGE IT"),
       h("button", { class: "btn reject", onclick: () => { rejectForm.hidden = !rejectForm.hidden; editForm.hidden = true; } }, "REJECT"),
       approveBtn,
       h("span", { class: "note", title: `rules ${rec.engine}` }, "Nothing is sent until a person approves.")),
     editForm, rejectForm, msg].filter((n) => n !== null && n !== undefined && n !== false));
-  return h("div", { class: "grid" }, panel("NEXT BEST ACTION · CASE " + rec.case_id, box), aiHolder);
+  const rules = panel("NEXT BEST ACTION · CASE " + rec.case_id, box, "rules-based");
+  return hero ? rules : h("div", { class: "grid" }, rules, aiHolder);
 }
 
 // ---------- ASK (Layer 2: plain-English questions, answered by Gemini with the SQL shown) ----------

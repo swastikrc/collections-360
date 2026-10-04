@@ -87,6 +87,8 @@ async function home() {
       h("p", { class: "muted", style: "margin-top:8px" }, `Total balance ${money(me.balance)} on your ${label(me.product)}. Reference ${me.case_id}.`),
       next ? h("p", null, h("span", { class: "pill ok" }, "Promise"), ` ${money(next.amount)} by ${date(next.due_date)}`) : null,
       plan ? h("p", null, h("span", { class: "pill ok" }, "Plan"), ` ${money(plan.proposed_payment_amount)} a month for ${plan.duration_months} months`) : null),
+    suggestionCard(),
+    h("h2", { class: "or" }, "Or choose for yourself"),
     h("div", { class: "actions" },
       h("button", { class: "tile", onclick: hardshipFlow }, h("b", null, "Money is tight right now"), h("span", null, "See options that lower or pause payments")),
       h("button", { class: "tile", onclick: promiseFlow }, h("b", null, "Choose a payment date"), h("span", null, "Promise an amount within 21 days")),
@@ -94,7 +96,6 @@ async function home() {
       h("button", { class: "tile", onclick: chat }, h("b", null, "Ask a question"), h("span", null, "Get answers about your account")),
       h("button", { class: "tile", onclick: contactFlow }, h("b", null, "How we contact you"), h("span", null, "Change channels or ask us to stop")),
       h("button", { class: "tile", onclick: disputeFlow }, h("b", null, "Something looks wrong"), h("span", null, "Dispute a fee or a charge"))),
-    suggestionCard(),
     pending.length ? h("div", { class: "card" }, h("h2", null, "Waiting for our team"),
       pending.map((r) => h("p", null, `${label(r.type)} · sent ${date(r.ts)} `, h("span", { class: "status pending" }, "pending review")))) : null,
     (me.promises || []).length ? h("div", { class: "card" }, h("h2", null, "Your payment promises"),
@@ -117,28 +118,36 @@ function suggestionCard() {
       try { await api("/callback", { method: "POST", body: { time: "next business day", topic: "general" } }); done("Done. Someone from our team will call you on the next business day."); }
       catch (e) { box.replaceChildren(h("p", { class: "error" }, e.message)); } }],
   };
-  const btn = h("button", { class: "btn secondary" }, "Get a suggestion");
+  const LABEL = "Show my AI next best step";
+  const btnText = h("span", null, LABEL);
+  const btn = h("button", { class: "ai-btn" }, h("span", { class: "sparkle", "aria-hidden": "true" }, "\u2726"), btnText);
   btn.addEventListener("click", async () => {
-    btn.disabled = true;
-    box.replaceChildren(h("p", { class: "muted" }, "Thinking about your options…"));
+    btn.disabled = true; btnText.textContent = "Thinking about your options…";
+    box.replaceChildren();
     let r;
     try { r = await api("/ai-nba", { method: "POST", body: {} }); }
-    catch (e) { box.replaceChildren(h("p", { class: "muted" }, "We couldn't get a suggestion just now. You can still use the options above.")); btn.disabled = false; return; }
-    btn.disabled = false;
-    const s = r.suggestion, st = s.suggested_step, a = ACT[st.app_action];
-    box.replaceChildren(
-      h("h3", { style: "margin:14px 0 4px" }, s.headline),
+    catch (e) { box.replaceChildren(h("div", { class: "ai-answer" }, h("p", { class: "muted" }, "We couldn't get a suggestion just now. You can still use the options below."))); return; }
+    finally { btn.disabled = false; btnText.textContent = LABEL; }
+    const s = r.suggestion, st = s.suggested_step, a = ACT[st.app_action], ai = r.source === "ai";
+    const others = (s.other_options || []).filter((o) => ACT[o.app_action]);
+    box.replaceChildren(h("div", { class: "ai-answer" },
+      h("span", { class: "ai-pill" }, ai ? "\u2726 AI suggestion" : "Our standard suggestion"),
+      ai ? null : h("p", { class: "muted" }, "The AI assistant isn't available right now, so this is the suggestion we give everyone in your situation."),
+      h("h3", null, s.headline),
       h("p", null, h("b", null, st.title), st.description ? " " + st.description : ""),
       s.why_this_may_help ? h("p", { class: "muted" }, "Why this may help: " + s.why_this_may_help) : null,
       a ? h("div", { class: "row" }, h("button", { class: "btn", onclick: a[1] }, a[0])) : null,
-      (s.other_options || []).filter((o) => ACT[o.app_action]).length ? h("p", { class: "hint" }, "Other options: ",
-        s.other_options.filter((o) => ACT[o.app_action]).map((o, i) => [i ? " · " : "", h("button", { class: "link", onclick: ACT[o.app_action][1] }, o.title)])) : null,
+      others.length ? h("p", { class: "hint" }, "Other options: ", others.map((o, i) => [i ? " · " : "", h("button", { class: "link", onclick: ACT[o.app_action][1] }, o.title)])) : null,
       s.reassurance ? h("p", { class: "muted" }, s.reassurance) : null,
-      h("p", { class: "hint" }, r.notice));
+      h("p", { class: "hint" }, r.notice)));
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
   });
-  return h("div", { class: "card" }, h("h2", null, "Not sure what to do next?"),
-    h("p", { class: "muted" }, "We can suggest a next step based on your account. Nothing changes until you choose."),
-    h("div", { class: "row" }, btn), box);
+  if (new URLSearchParams(location.search).get("ai") === "1") setTimeout(() => btn.click(), 0);      // demo link: open the suggestion straight away
+  return h("section", { class: "ai-card", "aria-label": "AI next best step" },
+    h("div", { class: "ai-eyebrow" }, h("span", { class: "sparkle", "aria-hidden": "true" }, "\u2726"), "AI next best step", h("span", { class: "ai-newtag" }, "New")),
+    h("h2", null, "Not sure what to do next?"),
+    h("p", null, "Our AI assistant looks at your account and suggests one clear next step, in plain words. Nothing changes until you choose, and a person reviews every request."),
+    btn, box);
 }
 
 // ---------- hardship (self-service) ----------

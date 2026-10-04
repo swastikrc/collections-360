@@ -70,3 +70,25 @@ td.n { text-align: right; }
 .steps { display: flex; gap: 6px; margin: 4px 0 10px; }
 .steps span { flex: 1; height: 4px; background: var(--rule); border-radius: 2px; }
 .steps span.on { background: var(--action); }
+
+/* AI next best step: the highlight of the home page */
+.ai-card { position: relative; margin: 16px 0 6px; padding: 20px 18px 18px; border-radius: 14px; color: #fff;
+           background: linear-gradient(125deg, #173f78 0%, #3a2f8f 55%, #6a2c91 100%); box-shadow: 0 10px 26px rgba(40, 40, 110, .28); }
+.ai-card h2 { font-size: 23px; margin: 6px 0 6px; color: #fff; }
+.ai-card > p { color: #e4e6f7; margin-bottom: 14px; }
+.ai-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #ffd98a; }
+.ai-newtag { background: #ffd98a; color: #2a2150; border-radius: 999px; padding: 0 8px; font-size: 12px; letter-spacing: .4px; }
+.sparkle { font-size: 1.2em; line-height: 1; }
+.ai-btn { display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; padding: 15px 18px; border: 0; border-radius: 10px; cursor: pointer;
+          font-size: 18px; font-weight: 700; color: #2a2150; background: #ffd98a; box-shadow: 0 0 0 3px rgba(255, 217, 138, .35), 0 6px 16px rgba(0, 0, 0, .25);
+          animation: aiGlow 2.4s ease-in-out infinite; }
+.ai-btn:hover { background: #ffe3a6; }
+.ai-btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.ai-btn[disabled] { opacity: .8; cursor: progress; animation: none; }
+@keyframes aiGlow { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 217, 138, .3), 0 6px 16px rgba(0, 0, 0, .25); }
+                    50% { box-shadow: 0 0 0 7px rgba(255, 217, 138, .5), 0 6px 20px rgba(0, 0, 0, .3); } }
+@media (prefers-reduced-motion: reduce) { .ai-btn { animation: none; } }
+.ai-answer { background: #fff; color: var(--ink); border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
+.ai-answer h3 { font-size: 19px; margin: 8px 0 4px; }
+.ai-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: #ece8fb; color: #3a2f8f; }
+h2.or { font-size: 16px; color: var(--muted); font-weight: 400; margin: 18px 0 0; }

@@ -157,8 +157,8 @@ approvals queue. Protective findings (stop contact, bankruptcy mention) hold con
 Spec: `SPEC_L3_AI_NBA.md` (this folder). Code: `c360/layer3/ai_nba.py`, `prompts/ai_nba_agent.md`,
 `prompts/ai_nba_customer.md`. Tests: `tests/layer3/test_ai_nba.py`.
 
-- **Agent terminal:** on a customer page, **ASK AI FOR A NEXT STEP** (in the next-best-action panel) opens an
-  **AI SUGGESTION (DRAFT)** panel below it.
+- **Agent terminal:** on a customer page, a highlighted strip near the top holds **ASK AI FOR THE NEXT BEST ACTION**
+  (and **+ LOG A CONVERSATION**). The AI draft opens inside that strip; the rules-based panel below is unchanged.
   - **What it shows:** the suggested step, whether it agrees with the rules, why (with policy citations), talking
     points and things to watch out for.
   - **What gets flagged:** any conflict with the contact rules (shown in red), and anything removed because the data
@@ -166,7 +166,7 @@ Spec: `SPEC_L3_AI_NBA.md` (this folder). Code: `c360/layer3/ai_nba.py`, `prompts
   - **USE AS EDIT:** pre-fills the existing CHANGE IT form. The agent still gives a reason and approves through the
     normal flow, so the contact rules and role rules still apply.
   - **ASK AGAIN:** team leads can ask for a fresh draft.
-- **Customer app:** on the home page, **Not sure what to do next? → Get a suggestion** shows one suggested step in
+- **Customer app:** on the home page, a highlighted **AI next best step** card (**Show my AI next best step**), placed above the other options, shows one suggested step in
   plain words. Its button opens an existing flow: apply for help, choose a payment date, pay, contact preferences,
   question a charge, or ask for a call. Every request still lands as "pending review".
 
