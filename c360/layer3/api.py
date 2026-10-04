@@ -275,7 +275,7 @@ def conversation_list(case_id: str, limit: int = 10):
 @app.get("/api/l3/conversations/{conversation_id}")
 def conversation_get(conversation_id: str):
     for it in actions.store().list(types=["conversation_log"], limit=500):
-        if (it.get("payload") or {}).get("conversation_id") == conversation_id:
+        if str((it.get("payload") or {}).get("conversation_id")).lower() == conversation_id.lower():
             return {"conversation": _conv_public(it, full=True), "followups": _followups(it["case_id"]).get(conversation_id, [])}
     raise HTTPException(404, {"error": "No such conversation."})
 

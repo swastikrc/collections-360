@@ -1026,8 +1026,11 @@ async function viewLog(arg) {
 
 async function viewConv(id) {
   if (!id) return viewHelp("Type CONV followed by a conversation id (shown on the customer page).");
+  id = /^cnv-/i.test(id) ? "CNV-" + id.slice(4).toLowerCase() : id;      // the command line upper-cases what is typed
   setView("log", loading("CONVERSATION " + id));
-  const r = await api("/conversations/" + encodeURIComponent(id));
+  let r;
+  try { r = await api("/conversations/" + encodeURIComponent(id)); }
+  catch (e) { setView("log", title("CONVERSATION " + id), errorBox(e)); return; }
   const it = r.conversation, p = it.payload, f = p.fields_final, approx = p.mode === "notes" || (p.warnings || []).includes("Times are approximate.");
   const hl = new Set(Object.values(p.evidence || {}).filter(Boolean).map((e) => e.turn_index));
   const corr = Object.fromEntries((p.corrections || []).map((c) => [c.field, c]));
@@ -1118,7 +1121,7 @@ async function viewAppr() {
     };
     const what = i.type === "hardship_request" && !p.program_id ? `Programme: to be chosen by the specialist · reason ${plain("hardship", p.reason)}${p.evidence ? ` · "${String(p.evidence).slice(0, 90)}"` : ""}`
       : i.type === "hardship_request" ? `${p.program_id} ${p.program_name || ""} · reason ${fmt.label(p.reason)}${p.estimate && p.estimate.amount != null ? ` · ~${fmt.money(p.estimate.amount)}/mo × ${p.estimate.months}` : ""}${p.requires_income_evidence ? " · needs income evidence" : ""}`
-      : i.type === "cease_request" ? "Written cease-communication request (POL-COLL-001 §5.4)"
+      : i.type === "cease_request" ? (p.conversation_id ? "Customer asked us to stop contact, logged from a conversation (POL-COLL-001 §5.4)" : "Written cease-communication request (POL-COLL-001 §5.4)")
       : i.type === "dispute_request" ? `${fmt.label(p.dispute_type)}: ${p.details || ""}`
       : i.type === "callback_request" ? `Callback ${p.time || ""} · ${p.topic || ""}`
       : i.type === "contact_preference" ? (p.note ? `Contact wish: "${p.note}"` : `Channels: ${JSON.stringify(p.channels || {})}`)
