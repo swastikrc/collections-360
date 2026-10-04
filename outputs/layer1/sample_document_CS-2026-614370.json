@@ -1,0 +1,551 @@
+{
+  "_id": "C360-ZOA-3450",
+  "master_crm_id": "ZOA-3450",
+  "identity": {
+    "crm_ids": [
+      "ZOA-3450"
+    ],
+    "crm_record_count": 1,
+    "card_customer_refs": [
+      "CX9956611"
+    ],
+    "borrower_refs": null,
+    "cifs": [
+      "0046768730"
+    ],
+    "source_keys": [
+      {
+        "src_system": "cards",
+        "src_ref": "CX9956611",
+        "link_status": "auto_link",
+        "match_confidence": 1.0,
+        "evidence": "sur:3:10.1;given:3:9.2;dob:3:14.7;phone:2:21.9;postal:2:18.0;bridge:3:14.1;"
+      },
+      {
+        "src_system": "core",
+        "src_ref": "0046768730",
+        "link_status": "auto_link",
+        "match_confidence": 1.0,
+        "evidence": "sur:3:10.1;given:3:9.1;dob:3:14.1;postal:2:19.9;"
+      }
+    ],
+    "min_link_confidence": 1.0,
+    "links_pending_review": 0
+  },
+  "profile": {
+    "first_name": "Zoe",
+    "middle_name": null,
+    "last_name": "Ayers",
+    "preferred_name": null,
+    "date_of_birth": {
+      "$date": "1993-11-23T00:00:00Z"
+    },
+    "age": 32,
+    "age_band": "25-34",
+    "customer_since_date": {
+      "$date": "2010-06-10T00:00:00Z"
+    },
+    "tenure_months": 195,
+    "segment": "mass",
+    "crm_status": "active",
+    "all_crm_records_deleted": false
+  },
+  "contact": {
+    "primary_phone": "2895730430",
+    "primary_phone_type": "mobile",
+    "email": "zayers@example.ca",
+    "address_line1": "4726 Front Av.",
+    "city": "Mississauga",
+    "province_code": "ON",
+    "postal_code": "L4W4T0",
+    "time_zone": "America/Toronto",
+    "returned_mail_flag": false,
+    "preferred_language": "EN",
+    "preferred_channel": null,
+    "preferred_contact_window": [
+      "09:00",
+      "20:00"
+    ],
+    "permitted_call_window_local": [
+      "07:00",
+      "21:00"
+    ]
+  },
+  "servicing_constraints": {
+    "consent_call": true,
+    "consent_autodialer": true,
+    "consent_sms": false,
+    "consent_email": true,
+    "voicemail_permitted": true,
+    "contact_at_work_permitted": false,
+    "internal_do_not_call": false,
+    "cease_communication": false,
+    "third_party_authorised": false,
+    "credit_counselling_agency": false,
+    "power_of_attorney": false,
+    "legal_representative": false,
+    "deceased": false,
+    "bankruptcy": false,
+    "consumer_proposal": false,
+    "fraud_victim": false,
+    "military_or_reserve": false,
+    "national_dncl_telemarketing_only": false
+  },
+  "financial_profile": {
+    "employment_status": "retired",
+    "occupation_category": null,
+    "employer_name": null,
+    "pay_frequency": "monthly",
+    "declared_annual_income": 31410.0,
+    "income_verified_flag": false,
+    "income_source": "pension_cpp_oas",
+    "housing_status": "rent",
+    "monthly_housing_cost": null,
+    "internal_risk_grade": "6",
+    "salary_avg_6m": null,
+    "salary_avg_prior_6m": null,
+    "salary_gap_months_6m": null,
+    "salary_last_credit_date": null
+  },
+  "accounts": {
+    "cards": [
+      {
+        "account_id": "C-818030",
+        "role": "primary",
+        "product_code": "TRV-INFINITE",
+        "card_tier": "infinite",
+        "account_status": "blocked",
+        "open_date": {
+          "$date": "2022-12-20T00:00:00Z"
+        },
+        "snapshot_date": {
+          "$date": "2026-09-28T00:00:00Z"
+        },
+        "credit_limit": 4500.0,
+        "current_balance": 3396.78,
+        "statement_balance": 3388.77,
+        "utilisation": 0.7548,
+        "minimum_payment_due": 201.58,
+        "payment_due_date": {
+          "$date": "2026-09-26T00:00:00Z"
+        },
+        "past_due_amount": 164.77,
+        "dpd": 33,
+        "dpd_bucket": "31-60",
+        "dpd_bucket_as_stored": "31-60",
+        "worst_dpd_12m": 33,
+        "times_30dpd_12m": 0,
+        "last_payment_date": {
+          "$date": "2026-09-13T00:00:00Z"
+        },
+        "last_payment_amount": 36.81,
+        "autopay_enrolled": false,
+        "autopay_failed_count_90d": 0,
+        "hardship_program_flag": true,
+        "hardship_program_type": "fixed_payment_plan",
+        "dispute_open_flag": false,
+        "chargeoff_flag": false,
+        "chargeoff_date": null,
+        "chargeoff_amount": null,
+        "cash_advance_count_90d": 2,
+        "link_status": "auto_link",
+        "link_confidence": 1.0,
+        "dq_flags": []
+      }
+    ],
+    "loans": [],
+    "deposits": []
+  },
+  "exposure": {
+    "card_balance_total": 3396.78,
+    "loan_outstanding_total": 0.0,
+    "deposit_balance_total": 0.0,
+    "past_due_total": 164.77,
+    "max_dpd": 33,
+    "worst_bucket": "31-60",
+    "delinquent_accounts": 1,
+    "product_count": 1
+  },
+  "bureau": {
+    "pull_date": {
+      "$date": "2026-09-15T00:00:00Z"
+    },
+    "hit_status": "hit",
+    "risk_score": 601,
+    "risk_score_prev_3m": 661,
+    "risk_score_delta_90d": -60,
+    "bankruptcy_score": 363,
+    "inquiries_hard_6m": 4,
+    "inquiries_hard_3m": 2,
+    "revolving_utilisation": 0.2603,
+    "total_monthly_obligations": 1833.7,
+    "total_balance_all_trades": 320189.67,
+    "off_us_revolving_balance": 513.23,
+    "off_us_delinquent_trades": 1,
+    "collection_items_count": 1,
+    "high_cost_lender_trades_count": 0,
+    "bnpl_trades_count": 0,
+    "new_trades_6m": 0,
+    "bankruptcy_on_file_flag": false,
+    "consumer_proposal_on_file_flag": false,
+    "deceased_indicator": false,
+    "fraud_alert_flag": false,
+    "address_mismatch_flag": false,
+    "dq_shifted_row": false,
+    "score_history": [
+      {
+        "pull_date": {
+          "$date": "2026-04-15T00:00:00Z"
+        },
+        "risk_score": 694
+      },
+      {
+        "pull_date": {
+          "$date": "2025-10-15T00:00:00Z"
+        },
+        "risk_score": 715
+      },
+      {
+        "pull_date": {
+          "$date": "2025-04-15T00:00:00Z"
+        },
+        "risk_score": 700
+      },
+      {
+        "pull_date": {
+          "$date": "2024-10-15T00:00:00Z"
+        },
+        "risk_score": 710
+      },
+      {
+        "pull_date": {
+          "$date": "2024-04-15T00:00:00Z"
+        },
+        "risk_score": 703
+      },
+      {
+        "pull_date": {
+          "$date": "2023-10-15T00:00:00Z"
+        },
+        "risk_score": 715
+      }
+    ]
+  },
+  "collections": {
+    "cases": [
+      {
+        "case_id": "CS-2026-614370",
+        "case_open_date": {
+          "$date": "2026-08-27T00:00:00Z"
+        },
+        "case_open_reason": "overlimit",
+        "case_status": "open",
+        "is_open": true,
+        "primary_account_id": "C-818030",
+        "primary_product": "card",
+        "account_ids": [
+          "C-818030"
+        ],
+        "current_dpd": 33,
+        "current_bucket": "31-60",
+        "current_bucket_as_stored": "31-60",
+        "total_overdue": 164.77,
+        "total_exposure": 3396.78,
+        "queue": "hardship_specialist",
+        "assigned_agent_id": "AG-2407",
+        "current_treatment": "hardship_review",
+        "next_scheduled_action": "outbound_call",
+        "contact_attempts_total": 2,
+        "rpc_count": 4,
+        "last_contact_ts": {
+          "$date": "2026-09-01T20:21:57Z"
+        },
+        "last_rpc_ts": {
+          "$date": "2026-09-27T16:59:55Z"
+        },
+        "hardship_flag": true,
+        "hardship_reason": "illness",
+        "hardship_program_offered": true,
+        "hardship_program_accepted": true,
+        "payment_plan_flag": true,
+        "plan_instalment_amount": 25.0,
+        "settlement_offered_flag": false,
+        "dispute_flag": false,
+        "complaint_flag": false,
+        "cease_contact_flag": false,
+        "third_party_rep_flag": false,
+        "insolvency_hold_flag": false,
+        "deceased_hold_flag": false,
+        "legal_referral_flag": false,
+        "chargeoff_flag": false,
+        "nba_recommendation_last": "call_evening",
+        "outcome": null,
+        "outcome_date": null,
+        "cure_flag": false,
+        "promises": {
+          "total": 3,
+          "kept": 1,
+          "partially_kept": 0,
+          "broken": 1,
+          "open": 1,
+          "amount_paid": 36.81,
+          "latest": {
+            "ptp_id": "PTP-5011976",
+            "amount": 95.0,
+            "due_date": {
+              "$date": "2026-10-14T00:00:00Z"
+            },
+            "status": "open",
+            "created_ts": {
+              "$date": "2026-09-27T16:59:55Z"
+            },
+            "channel": "call"
+          }
+        },
+        "offers": [
+          {
+            "offer_id": "OF-5001295",
+            "program_id": "HP-CARD-FPP",
+            "offer_ts": {
+              "$date": "2026-09-01T11:18:24Z"
+            },
+            "offered_by": "agent",
+            "proposed_payment_amount": 25.0,
+            "duration_months": 12,
+            "customer_response": "accepted",
+            "plan_status": "active"
+          }
+        ],
+        "link_method": "crm_id_exact",
+        "link_confidence": 1.0,
+        "dq_flags": []
+      }
+    ],
+    "open_cases": 1,
+    "contacts": {
+      "outbound_attempts_total": 2,
+      "outbound_attempts_30d": 2,
+      "outbound_calls_7d": 0,
+      "rpc_total": 4,
+      "rpc_30d": 4,
+      "inbound_contacts_total": 3,
+      "disputes_raised": 0,
+      "complaints_raised": 0,
+      "payments_taken_on_contacts": null,
+      "last_contact_ts": {
+        "$date": "2026-09-27T16:59:55Z"
+      },
+      "last_rpc_ts": {
+        "$date": "2026-09-27T16:59:55Z"
+      },
+      "last_contact_channel": "call",
+      "last_outcome_code": "PTP",
+      "most_common_rpc_hour": 16
+    },
+    "notes_total": 4,
+    "recent_notes": [
+      {
+        "note_id": "N-5038079",
+        "note_ts": {
+          "$date": "2026-09-27T17:02:55Z"
+        },
+        "note_type": "hardship_assessment",
+        "agent_id": "AG-2021",
+        "case_id": "CS-2026-614370",
+        "note_text": "spoke to customer. off work sick since Jul. promised 95 by the 14th. asked about hardship options. mentioned anxiety, very stressed. cust crying. refer to hardship team"
+      },
+      {
+        "note_id": "N-5032269",
+        "note_ts": {
+          "$date": "2026-09-06T14:46:40Z"
+        },
+        "note_type": "call_note",
+        "agent_id": "AG-2764",
+        "case_id": "CS-2026-614370",
+        "note_text": "spoke to customer, was in hospital last month, no income, PTP 37 Sep 22, asked if pmt can be reduced, mentioned anxiety, very stressed, refer to hardship tem"
+      },
+      {
+        "note_id": "N-5031065",
+        "note_ts": {
+          "$date": "2026-09-01T11:23:24Z"
+        },
+        "note_type": "call_note",
+        "agent_id": "AG-2358",
+        "case_id": "CS-2026-614370",
+        "note_text": "spoke w/ cust. money is tight right now. asked about hardship options. mentioned anxiety, very stressed. CB scheduled"
+      },
+      {
+        "note_id": "N-5030628",
+        "note_ts": {
+          "$date": "2026-08-29T12:22:01Z"
+        },
+        "note_type": "hardship_assessment",
+        "agent_id": "AG-6774",
+        "case_id": "CS-2026-614370",
+        "note_text": "cust called in. on medical leave since Jul. can pay 55 on the 30th. asked if pmt can be reduced. cust crying. refer to hardship team"
+      }
+    ],
+    "call_transcripts": [
+      {
+        "transcript_id": "5010384",
+        "contact_id": "CT-5127986",
+        "case_id": "CS-2026-614370",
+        "call_start_ts": {
+          "$date": "2026-09-27T16:59:55Z"
+        },
+        "duration_sec": 148,
+        "direction": "inbound",
+        "language": "en-CA",
+        "voice_sample_id": null,
+        "file_path": "transcripts/2026/09/5010384.json"
+      }
+    ]
+  },
+  "hardship_indicators": {
+    "financial_hardship_flag": true,
+    "reasons": [
+      "open collections case is coded as hardship",
+      "an account is on a hardship programme",
+      "customer mentioned hardship on 2 contact(s) in the last 90 days"
+    ],
+    "hardship_mentions_total": 2,
+    "nsf_count_mtd": 0
+  },
+  "model_scores": [
+    {
+      "model_name": "best_time_to_contact",
+      "model_version": "v1.2",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.02,
+      "score_band": "low",
+      "recommended_action": null,
+      "top_reason_1_text": "Card utilisation 43%",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "channel_propensity",
+      "model_version": "v1.1",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.6383,
+      "score_band": "high",
+      "recommended_action": null,
+      "top_reason_1_text": "Bureau score down 40 in 90 days",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "collections_risk",
+      "model_version": "v3.0",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.5391,
+      "score_band": "high",
+      "recommended_action": null,
+      "top_reason_1_text": "Payroll deposit 45 days late",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "contactability",
+      "model_version": "v1.4",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.4201,
+      "score_band": "medium",
+      "recommended_action": "call_daytime",
+      "top_reason_1_text": "Payroll deposit 17 days late",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "cure_30d",
+      "model_version": "v2.3",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.3946,
+      "score_band": "medium",
+      "recommended_action": "sms_payment_link",
+      "top_reason_1_text": "19 returned payments in 3 months",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "hardship_propensity",
+      "model_version": "v0.9",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.6434,
+      "score_band": "high",
+      "recommended_action": null,
+      "top_reason_1_text": "10 returned payments in 3 months",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "ptp_break",
+      "model_version": "v2.1",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.464,
+      "score_band": "medium",
+      "recommended_action": "reminder_before_due",
+      "top_reason_1_text": "40 right-party contacts in 30 days",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "roll_forward_30d",
+      "model_version": "v2.3",
+      "score_date": {
+        "$date": "2026-09-28T00:00:00Z"
+      },
+      "score": 0.8438,
+      "score_band": "very_high",
+      "recommended_action": null,
+      "top_reason_1_text": "Customer for 17 months",
+      "uses_protected_attributes": false
+    },
+    {
+      "model_name": "self_cure",
+      "model_version": "v1.0",
+      "score_date": {
+        "$date": "2026-08-31T00:00:00Z"
+      },
+      "score": 0.6646,
+      "score_band": "high",
+      "recommended_action": null,
+      "top_reason_1_text": "10 broken PTP in 30 days",
+      "uses_protected_attributes": false
+    }
+  ],
+  "data_quality_notes": [],
+  "lineage": {
+    "pipeline_version": "layer1-1.0.0",
+    "built_ts": {
+      "$date": "2026-10-03T15:21:24.126Z"
+    },
+    "snapshot_date": {
+      "$date": "2026-09-28T00:00:00Z"
+    },
+    "sources": [
+      "customers",
+      "card_accounts",
+      "loan_accounts",
+      "deposit_accounts",
+      "external",
+      "bureau_history",
+      "salary_credit_history",
+      "collections_cases",
+      "promises_to_pay",
+      "offers",
+      "contact_history",
+      "agent_notes",
+      "call_transcripts",
+      "model_scores"
+    ]
+  },
+  "interactions": []
+}
