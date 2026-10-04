@@ -18,7 +18,9 @@ from c360.layer3 import config
 TYPES = {"nba_decision", "hardship_request", "promise", "payment", "cease_request", "callback_request",
          "dispute_request", "contact_preference", "assistant_message", "postcall_review",
          # logged from a conversation in the terminal (c360/layer3/conversation.py)
-         "conversation_log", "vulnerability_flag", "insolvency_check", "conduct_alert"}
+         "conversation_log", "vulnerability_flag", "insolvency_check", "conduct_alert",
+         # AI next best step (c360/layer3/ai_nba.py): one record per click, and when an agent uses it as an edit
+         "ai_nba_suggestion", "ai_nba_used"}
 
 
 class ActionStore:

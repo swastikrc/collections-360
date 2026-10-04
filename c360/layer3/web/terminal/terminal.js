@@ -77,6 +77,7 @@ const GLOSSARY = [
   ["Postal area", "The first 3 characters of the postal code (e.g. M5V), about one neighbourhood."],
   ["Next best action", "What the system suggests doing next, with the reasons. Nothing happens until a person approves it."],
   ["Promise risk", "A model's estimate of the chance a promise will not be kept in full. Advice only."],
+  ["AI suggestion", "A draft from an AI model to help you plan the contact. The rules-based step and a person's approval still apply."],
 ];
 
 // ---------- state + API ----------
@@ -556,7 +557,7 @@ async function viewCust(key) {
   // right: case, promises, contacts, notes, calls
   const pr = kase.promises || {};
   const right = h("div", { class: "grid" },
-    panel("CASE " + (kase.case_id || ""), h("div", { class: "kv" },
+    panel("CASE " + (kase.case_id || ""), h("div", null, h("div", { class: "kv" },
       h("span", { class: "k" }, "Status"), h("span", { class: "v" }, kase.outcome ? fmt.label(kase.outcome) : "open"),
       h("span", { class: "k" }, "Opened · why"), h("span", { class: "v" }, `${fmt.date(kase.case_open_date)} · ${fmt.label(kase.case_open_reason)}`),
       h("span", { class: "k" }, "Team · current approach"), h("span", { class: "v" }, `${fmt.label(kase.queue)} · ${fmt.label(kase.current_treatment)}`),
@@ -566,7 +567,7 @@ async function viewCust(key) {
       h("span", { class: "k" }, "Promises"), h("span", { class: "v" }, `${pr.kept ?? 0} kept · ${pr.broken ?? 0} broken · ${pr.open ?? 0} open`),
       h("span", { class: "k" }, "Agent"), h("span", { class: "v" }, `${kase.assigned_agent_id || "—"}${kase.assigned_agent ? " · " + kase.assigned_agent.site : ""}`)),
       (kase.offers || []).length ? h("div", { style: "margin-top:6px" }, h("div", { class: "muted" }, "Hardship offers made:"), kase.offers.slice(0, 3).map((o) => h("div", { class: "muted" },
-        `${o.program_id}: ${fmt.money(o.proposed_payment_amount)} a month for ${o.duration_months ?? "?"} months · customer ${o.customer_response ? fmt.label(o.customer_response) : "has not answered"} · plan ${o.plan_status ? fmt.label(o.plan_status) : "not started"}`))) : null),
+        `${o.program_id}: ${fmt.money(o.proposed_payment_amount)} a month for ${o.duration_months ?? "?"} months · customer ${o.customer_response ? fmt.label(o.customer_response) : "has not answered"} · plan ${o.plan_status ? fmt.label(o.plan_status) : "not started"}`))) : null)),
     panel("PROMISES TO PAY", (pr.items || []).length ? h("div", null, promiseChart(pr.items), h("table", null, h("tbody", null, pr.items.slice(0, 6).map((x) => h("tr", null,
       h("td", null, "due " + fmt.date(x.ptp_due_date)), h("td", { class: "n" }, fmt.money(x.ptp_amount)),
       h("td", { class: x.ptp_status === "kept" ? "good" : x.ptp_status === "broken" ? "bad" : "warn" }, x.ptp_status === "partially_kept" ? "part paid" : x.ptp_status === "open" ? "not due yet / open" : fmt.label(x.ptp_status))))))) : h("div", { class: "muted" }, "None.")),
@@ -711,6 +712,52 @@ function nbaPanel(rec, doc) {
       if (!rr.value) { msg.replaceChildren(h("div", { class: "err" }, "Choose a reason to reject.")); return; }
       submit("reject", { reason: [rr.value, rt.value.trim()].filter(Boolean).join(": "), reason_code: rr.value }); } }, "REJECT WITH REASON"))));
 
+  // AI suggestion (draft): on demand only; it never replaces the rules panel and can only pre-fill the CHANGE IT form
+  const aiHolder = h("div");
+  const aiBtn = h("button", { class: "btn", tabindex: 0, title: "A draft from an AI model to help you plan the contact. The rules-based step and a person's approval still apply." }, "ASK AI FOR A NEXT STEP");
+  async function askAi(refresh) {
+    aiBtn.disabled = true;
+    aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", h("div", { class: "loading" }, "Asking the AI…")));
+    let r;
+    try { r = await api(`/cases/${rec.case_id}/ai-nba`, { method: "POST", body: { refresh: !!refresh } }); }
+    catch (e) { aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", errorBox(e))); aiBtn.disabled = false; return; }
+    aiBtn.disabled = false;
+    const s = r.suggestion, st = s.suggested_step, ai = r.source === "ai", m = r.meta || {};
+    const chan = { call: "Phone call", sms: "Text message", email: "Email", letter: "Letter", none: "No contact" };
+    const list = (items, cls) => items && items.length ? h("ul", { class: "reasons " + (cls || "") }, items.map((x) => typeof x === "string" ? h("li", null, x)
+      : h("li", null, x.text, x.cite ? h("span", { class: "cite" }, x.cite) : null))) : null;
+    const useBtn = ai && r.prefill_edit ? h("button", { class: "btn approve", onclick: () => {
+      const pf = r.prefill_edit;
+      if (pf.channel) f.channel.value = pf.channel;
+      if (pf.date) f.date.value = pf.date;
+      if (pf.window_local) f.window.value = pf.window_local;
+      if (pf.amount !== null && pf.amount !== undefined) f.amount.value = pf.amount;
+      editForm.hidden = false; rejectForm.hidden = true; recheck();
+      api(`/cases/${rec.case_id}/ai-nba/used`, { method: "POST" }).catch(() => {});
+      f.reason.focus();
+    } }, "USE AS EDIT") : null;
+    const again = ["team_lead", "admin"].includes(state.role) ? h("button", { class: "btn", onclick: () => askAi(true) }, "ASK AGAIN") : null;
+    aiHolder.replaceChildren(panel("AI SUGGESTION (DRAFT)", h("div", { class: "nba", title: ai ? `model ${m.model} · prompt v${m.prompt_version}${m.cached ? " · from cache" : ""}` : "rules-based" },
+      h("div", { class: ai ? "note" : "banner hard" }, r.notice),
+      h("div", { class: "action ai" }, st.title),
+      h("div", { class: "kv" },
+        h("span", { class: "k" }, "How"), h("span", { class: "v" }, chan[st.channel] || st.channel || "—"),
+        h("span", { class: "k" }, "When"), h("span", { class: "v" }, st.when || "—"),
+        h("span", { class: "k" }, "Amount to ask for"), h("span", { class: "v" }, st.amount !== null && st.amount !== undefined ? fmt.money(st.amount) : "—"),
+        h("span", { class: "k" }, "Hardship option"), h("span", { class: "v" }, st.programme || "—")),
+      ai ? h("div", { class: s.agrees_with_rules ? "good" : "warn", style: "margin-top:6px" }, s.agrees_with_rules ? "Agrees with the rules" : "Differs from the rules: " + (s.difference_from_rules || "")) : null,
+      (s.why || []).length ? h("div", { class: "muted", style: "margin-top:8px" }, "WHY") : null, list(s.why),
+      (s.talking_points || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "TALKING POINTS") : null, list(s.talking_points),
+      (s.watch_outs || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "WATCH OUT FOR") : null, list(s.watch_outs, "safeguards"),
+      (r.conflicts || []).length ? h("div", null, h("div", { class: "bad", style: "margin-top:6px" }, "PROBLEMS with this suggestion (the contact rules still apply)"), list(r.conflicts, "conflicts")) : null,
+      (r.removed || []).length ? h("div", { class: "muted", style: "margin-top:6px" }, "Removed because not supported by the data: " + r.removed.join(" · ")) : null,
+      h("div", { class: "bar" }, useBtn, again,
+        h("span", { class: "note" }, ai ? `Draft only. ${m.cached ? "From cache. " : ""}${m.calls_today ?? 0} of ${m.daily_cap ?? "?"} AI calls used today.` : "Standard recommendation (no AI)."))),
+      ai ? "AI draft · a person decides" : "standard recommendation"));
+  }
+  aiBtn.addEventListener("click", () => askAi(false));
+  if (new URLSearchParams(location.search).get("ai") === "1") setTimeout(() => askAi(false), 0);      // demo link: open the AI draft straight away
+
   box.append(...[
     h("div", { class: "muted" }, "SUGGESTED NEXT STEP"),
     h("div", { class: "action", title: "rule " + rec.action.code }, rec.action.label),
@@ -733,12 +780,13 @@ function nbaPanel(rec, doc) {
     t && t.notes && t.notes.length ? h("div", { class: "note" }, t.notes.join(" ")) : null,
     conflictsEl,
     h("div", { class: "bar" },
+      aiBtn,
       h("button", { class: "btn", onclick: () => { editForm.hidden = !editForm.hidden; rejectForm.hidden = true; } }, "CHANGE IT"),
       h("button", { class: "btn reject", onclick: () => { rejectForm.hidden = !rejectForm.hidden; editForm.hidden = true; } }, "REJECT"),
       approveBtn,
       h("span", { class: "note", title: `rules ${rec.engine}` }, "Nothing is sent until a person approves.")),
     editForm, rejectForm, msg].filter((n) => n !== null && n !== undefined && n !== false));
-  return panel("NEXT BEST ACTION · CASE " + rec.case_id, box);
+  return h("div", { class: "grid" }, panel("NEXT BEST ACTION · CASE " + rec.case_id, box), aiHolder);
 }
 
 // ---------- ASK (Layer 2: plain-English questions, answered by Gemini with the SQL shown) ----------

@@ -742,3 +742,23 @@ which model wrote it.
   - No answer without a tool result, no Flash-Lite answers, no customer names.
   - Dev questions with a numeric or refusal key: 12 of 15 match (was 10).
 - **Not done:** a Pro-model run (no Pro quota on the available keys); the acceptance report's example section.
+
+## Layer 3: AI next best step buttons, terminal fixes (2026-10-04, ~21:40 IST, after the deadline extension)
+
+- **Terminal fix:** the suggested step and the page titles were invisible (a web font whose text did not render).
+  They now use the terminal font, and the step sits in a highlighted box. The CASE panel's hardship offers moved out
+  of the title bar.
+- **`SPEC_L3_AI_NBA.md` built in full:**
+  - `c360/layer3/ai_nba.py`: facts builders, model call, validation, fallbacks, cache, daily cap and audit;
+  - both prompt files;
+  - `POST /api/l3/cases/{id}/ai-nba`, `…/ai-nba/used` and `POST /api/me/ai-nba`; the health field;
+  - the terminal button, the AI SUGGESTION (DRAFT) panel, USE AS EDIT and ASK AGAIN; the customer-app card.
+  - Details: `docs/layer3/README.md`.
+- **One addition to the spec:** `C360_L3_AI_MODEL` may list several models, tried in order, so the buttons keep
+  working when one free-tier model is out of quota.
+- **Tests:** `tests/layer3/test_ai_nba.py` (10 tests, with a fake model): AI off, facts whitelist, conflict on a
+  blocked channel plus the existing 409, ungrounded amount, unknown citation, injected instruction, hardship-first,
+  stop-contact, internal terms, repair then fallback, cache, refresh roles, daily cap, audit, and access. Layer 3:
+  **61 passed**.
+- **Live check:** agent and customer suggestions on CS-2026-614370 with `gemini-3.5-flash` (two other models were out
+  of quota and skipped).

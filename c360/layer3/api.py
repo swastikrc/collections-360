@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from c360.layer3 import actions, assistant, config, conversation, hardship, nba, postcall
+from c360.layer3 import actions, ai_nba, assistant, config, conversation, hardship, nba, postcall
 from c360.layer3.data.source import BadKey, NotFound, get_source
 from c360.layer3.policy import library
 from c360.layer3.util import as_date
@@ -69,7 +69,8 @@ def health():
     return {"status": "ok", "source": s.name, "snapshot_date": config.SNAPSHOT_DATE.isoformat(),
             "store_built": str((getattr(s, "meta", None) or {}).get("built_ts")),
             "actions": actions.store().counts(), "policy_sections": len(library().sections),
-            "postcall_eval": ev.exists(), "engines": [nba.ENGINE_VERSION, "postcall-rules-1.1"]}
+            "postcall_eval": ev.exists(), "engines": [nba.ENGINE_VERSION, "postcall-rules-1.1"],
+            "ai_nba": ai_nba.status()}
 
 
 @app.get("/api/l3/portfolio")
@@ -212,6 +213,29 @@ def approve_request(item_id: str, body: Approval, user=Depends(employee)):
     if out is None:
         raise HTTPException(409, {"error": "This request was already decided."})
     return out
+
+
+# ---- employee: AI next best step (a draft to help plan the contact; the rules and a person still decide) ----
+class AiNbaReq(BaseModel):
+    refresh: bool = False
+    case_id: str | None = None
+
+
+@app.post("/api/l3/cases/{case_id}/ai-nba")
+def case_ai_nba(case_id: str, body: AiNbaReq | None = None, user=Depends(employee)):
+    doc = conversation.overlay(src().customer_doc(case_id), actions.store())
+    if nba.pick_case(doc, case_id) is None:
+        raise NotFound(f"No case '{case_id}'")
+    return ai_nba.suggest_for_agent(doc, case_id, user, refresh=bool(body and body.refresh))
+
+
+@app.post("/api/l3/cases/{case_id}/ai-nba/used")
+def case_ai_nba_used(case_id: str, user=Depends(employee)):
+    """Record that the agent opened the edit form pre-filled from the AI suggestion (nothing is decided yet)."""
+    doc = src().customer_doc(case_id)
+    item = actions.store().add("ai_nba_used", doc["_id"], case_id, {"used_as": "edit_prefill"}, source="layer3.ai_nba",
+                               actor=user["id"], status="recorded")
+    return {"status": "recorded", "id": item["id"]}
 
 
 # ---- employee: log a conversation (paste a transcript or notes -> facts, follow-ups, checks) ----------
@@ -496,6 +520,18 @@ def my_dispute(body: DisputeReq, sess=Depends(me)):
     doc, case = _my(sess)
     return actions.store().add("dispute_request", doc["_id"], case["case_id"], body.model_dump(),
                                source="layer3.customer_app", actor="customer", status="pending")
+
+
+@app.post("/api/me/ai-nba")
+def my_ai_nba(body: AiNbaReq | None = None, sess=Depends(me)):
+    """A suggested next step for the signed-in customer, about their own account only."""
+    doc, case = _my(sess)
+    if body and body.case_id and body.case_id != case.get("case_id"):
+        mine = {c.get("case_id") for c in (doc.get("collections") or {}).get("cases") or []}
+        if body.case_id not in mine:
+            raise NotFound(f"No case '{body.case_id}'")
+        case = nba.pick_case(doc, body.case_id)
+    return ai_nba.suggest_for_customer(doc, case["case_id"], sess, refresh=False)
 
 
 class CallbackReq(BaseModel):

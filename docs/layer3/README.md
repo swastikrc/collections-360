@@ -150,8 +150,75 @@ http://127.0.0.1:8300/terminal and press F10. The Layer 2 API can also run alone
 Paste a transcript or notes on a customer's page. The system extracts hardship, promises, disputes, stop-contact
 requests and more, each with the line it came from. The agent corrects and confirms, and follow-ups go to the
 approvals queue. Protective findings (stop contact, bankruptcy mention) hold contact immediately. Guide:
-[CONVERSATION_LOG.md](CONVERSATION_LOG.md). Specs: `SPEC_L3_CONVERSATION_EXTRACT.md` (built, core scope) and
-`SPEC_L3_AI_NBA.md` (not built).
+[CONVERSATION_LOG.md](CONVERSATION_LOG.md). Spec: `SPEC_L3_CONVERSATION_EXTRACT.md` (built, core scope).
+
+## AI next best step buttons (4 Oct)
+
+Spec: `SPEC_L3_AI_NBA.md` (this folder). Code: `c360/layer3/ai_nba.py`, `prompts/ai_nba_agent.md`,
+`prompts/ai_nba_customer.md`. Tests: `tests/layer3/test_ai_nba.py`.
+
+- **Agent terminal:** on a customer page, **ASK AI FOR A NEXT STEP** (in the next-best-action panel) opens an
+  **AI SUGGESTION (DRAFT)** panel below it.
+  - **What it shows:** the suggested step, whether it agrees with the rules, why (with policy citations), talking
+    points and things to watch out for.
+  - **What gets flagged:** any conflict with the contact rules (shown in red), and anything removed because the data
+    did not support it.
+  - **USE AS EDIT:** pre-fills the existing CHANGE IT form. The agent still gives a reason and approves through the
+    normal flow, so the contact rules and role rules still apply.
+  - **ASK AGAIN:** team leads can ask for a fresh draft.
+- **Customer app:** on the home page, **Not sure what to do next? → Get a suggestion** shows one suggested step in
+  plain words. Its button opens an existing flow: apply for help, choose a payment date, pay, contact preferences,
+  question a charge, or ask for a call. Every request still lands as "pending review".
+
+**The AI suggests; a person decides.** Nothing the model returns is executed, sent or saved as a decision. The model is
+called only when someone clicks.
+
+**What the model sees:** a compact facts object.
+- **Agent facts:** case figures, promises, offers, contact constraints, hardship and eligible programmes, the
+  rules-based recommendation, up to 5 masked notes, and 3 policy excerpts.
+- **Customer facts:** only what the app already shows the customer.
+- **Never sent:** names, contact details, protected attributes, employer, agent ids or other customers.
+
+**Checks in code after every call:**
+- **Grounded numbers:** every number must appear in the facts, otherwise the sentence is removed.
+- **Citations:** each must be one the facts contain, otherwise it is dropped.
+- **Masking:** phone numbers and emails are masked.
+- **Banned wording:** threats, legal action, credit-score warnings and pressure are removed.
+- **Amount and programme:** the amount must be within the amount overdue, and the programme must be an eligible one.
+- **Contact rules:** the suggestion is run through `nba.check`, and conflicts are shown, never hidden.
+- **Customer-side rules:**
+  - hardship first: never "pay" or "promise" when hardship is on file;
+  - a stop-contact request is respected: no callback suggestion;
+  - any internal term (risk, score, band …) sends the reply to the standard suggestion instead.
+
+**Works without the model.** With AI off, out of quota, timed out or giving invalid output, both buttons show the
+standard rules-based suggestion, clearly labelled.
+
+**Configuration:**
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `C360_L3_AI` | `off` | `on` enables model calls (needs `GEMINI_API_KEY`) |
+| `C360_L3_AI_MODEL` | `C360_L2_MODEL` | Gemini model; several can be listed, comma-separated, tried in order |
+| `C360_L3_AI_TIMEOUT_S` | 25 | per call |
+| `C360_L3_AI_DAILY_CAP` | 15 | live calls per day; cache hits do not count |
+| `C360_L3_AI_CACHE` | `outputs/layer3/ai_nba.sqlite` | response cache and daily usage |
+
+To switch it off: `export C360_L3_AI=off`. `GET /api/l3/health` reports
+`ai_nba: {enabled, model, calls_today, daily_cap}`.
+
+**Audit:** every click writes an `ai_nba_suggestion` record with the audience, source (ai or fallback), model, prompt
+version, cached flag and the validated suggestion. It never stores the prompt or notes. **USE AS EDIT** writes
+`ai_nba_used`.
+
+**Live check (4 Oct, case CS-2026-614370):**
+- **Agent:** the AI suggested a call to discuss hardship options and offer "Skip a payment", differing from the rules'
+  payment reminder. It gave cited reasons and a warning that SMS is blocked.
+- **Customer:** it suggested applying to skip a payment.
+- **Screenshot:** `docs/screenshots/ai_1_agent_suggestion.png`.
+
+**Not done:** a streaming UI; French prompts; a browser click-through of the customer card (the API and the fallback
+are tested).
 
 ## Not done yet
 

@@ -94,6 +94,7 @@ async function home() {
       h("button", { class: "tile", onclick: chat }, h("b", null, "Ask a question"), h("span", null, "Get answers about your account")),
       h("button", { class: "tile", onclick: contactFlow }, h("b", null, "How we contact you"), h("span", null, "Change channels or ask us to stop")),
       h("button", { class: "tile", onclick: disputeFlow }, h("b", null, "Something looks wrong"), h("span", null, "Dispute a fee or a charge"))),
+    suggestionCard(),
     pending.length ? h("div", { class: "card" }, h("h2", null, "Waiting for our team"),
       pending.map((r) => h("p", null, `${label(r.type)} · sent ${date(r.ts)} `, h("span", { class: "status pending" }, "pending review")))) : null,
     (me.promises || []).length ? h("div", { class: "card" }, h("h2", null, "Your payment promises"),
@@ -103,6 +104,41 @@ async function home() {
       h("table", null, h("tbody", null, me.requests.slice(0, 8).map((r) => h("tr", null, h("td", null, label(r.type)),
         h("td", null, h("span", { class: "status " + r.status }, r.status === "recorded" ? "done" : r.status)),
         h("td", { class: "muted" }, r.decision_reason || "")))))) : null);
+}
+
+// ---------- "Not sure what to do next?" (a suggestion; it only opens one of the flows above) ----------
+function suggestionCard() {
+  const box = h("div");
+  const done = (text) => box.replaceChildren(h("div", { class: "okmsg" }, text));
+  const ACT = {
+    hardship: ["Apply for help", () => hardshipFlow()], promise: ["Choose a payment date", () => promiseFlow()], pay: ["Make a payment", () => payFlow()],
+    contact: ["Update how we contact you", () => contactFlow()], dispute: ["Question a charge", () => disputeFlow()],
+    callback: ["Ask someone to call me", async () => {
+      try { await api("/callback", { method: "POST", body: { time: "next business day", topic: "general" } }); done("Done. Someone from our team will call you on the next business day."); }
+      catch (e) { box.replaceChildren(h("p", { class: "error" }, e.message)); } }],
+  };
+  const btn = h("button", { class: "btn secondary" }, "Get a suggestion");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    box.replaceChildren(h("p", { class: "muted" }, "Thinking about your options…"));
+    let r;
+    try { r = await api("/ai-nba", { method: "POST", body: {} }); }
+    catch (e) { box.replaceChildren(h("p", { class: "muted" }, "We couldn't get a suggestion just now. You can still use the options above.")); btn.disabled = false; return; }
+    btn.disabled = false;
+    const s = r.suggestion, st = s.suggested_step, a = ACT[st.app_action];
+    box.replaceChildren(
+      h("h3", { style: "margin:14px 0 4px" }, s.headline),
+      h("p", null, h("b", null, st.title), st.description ? " " + st.description : ""),
+      s.why_this_may_help ? h("p", { class: "muted" }, "Why this may help: " + s.why_this_may_help) : null,
+      a ? h("div", { class: "row" }, h("button", { class: "btn", onclick: a[1] }, a[0])) : null,
+      (s.other_options || []).filter((o) => ACT[o.app_action]).length ? h("p", { class: "hint" }, "Other options: ",
+        s.other_options.filter((o) => ACT[o.app_action]).map((o, i) => [i ? " · " : "", h("button", { class: "link", onclick: ACT[o.app_action][1] }, o.title)])) : null,
+      s.reassurance ? h("p", { class: "muted" }, s.reassurance) : null,
+      h("p", { class: "hint" }, r.notice));
+  });
+  return h("div", { class: "card" }, h("h2", null, "Not sure what to do next?"),
+    h("p", { class: "muted" }, "We can suggest a next step based on your account. Nothing changes until you choose."),
+    h("div", { class: "row" }, btn), box);
 }
 
 // ---------- hardship (self-service) ----------
