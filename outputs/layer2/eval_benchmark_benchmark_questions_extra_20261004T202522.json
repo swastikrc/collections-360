@@ -1,0 +1,640 @@
+{
+  "set": "benchmark_benchmark_questions_extra",
+  "model": "rotation: gemini-3.8-flash, gemini-3.7-flash, gemini-3.6-flash, gemini-3-flash-preview, gemini-3.5-flash",
+  "fake": false,
+  "build": {
+    "build_ts": "20261004T141506",
+    "snapshot_date": "2026-09-28",
+    "pipeline_version": "layer1-1.0.0",
+    "source_db_path": "/home/swastikroychowdhury/Documents/cibc/warehouse/c360.duckdb",
+    "source_db_mtime": "2026-10-03 20:30:04.886924",
+    "l2_version": "layer2-1.0.0",
+    "text_search_mode": "fts"
+  },
+  "partial": false,
+  "summary": {
+    "questions": 6,
+    "passed": 0,
+    "scored": 0,
+    "accuracy": null,
+    "manual": 6,
+    "skipped": 0,
+    "by_tag": {
+      "benchmark": {
+        "passed": 0,
+        "scored": 0,
+        "accuracy": null
+      },
+      "split:extra": {
+        "passed": 0,
+        "scored": 0,
+        "accuracy": null
+      }
+    },
+    "refusal_accuracy": null,
+    "paraphrase_groups": 0,
+    "paraphrase_groups_consistent": null,
+    "avg_tool_calls": 2.33,
+    "avg_latency_s": 26.68,
+    "trap_rule_hits": 0,
+    "answers_with_personal_data": 0,
+    "governed_answers": 1,
+    "custom_sql_answers": 3
+  },
+  "results": [
+    {
+      "id": "BQ-104",
+      "question": "Summarise the most recent recorded call on case CS-2026-453815: what did the customer say and agree to?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "In the most recent call on September 27, 2026, the customer stated he is currently waiting for Employment Insurance (EI) benefits after applying in August and does not have sufficient funds. He complained about the frequency of contact attempts and requested a payment reduction. He agreed to a promise to pay $50 by October 17, 2026, and accepted a 'Skip Payment' hardship offer; the call was subseq",
+      "tools": [
+        "get_customer",
+        "search_text",
+        "search_text"
+      ],
+      "governed": [],
+      "sql": [
+        "SELECT t.transcript_id AS id, t.case_id, t.c360_id, t.call_start_ts AS ts, t.direction AS extra, t.transcript_text AS body, 0 AS score\nFROM l2.call_transcripts t\nWHERE t.transcript_text IS NOT NULL AND t.case_id = 'CS-2026-453815'\nORDER BY ts DESC\nLIMIT 20",
+        "SELECT n.note_id AS id, n.case_id, n.c360_id, n.note_ts AS ts, n.note_type AS extra, n.note_text AS body, fts_l2_agent_notes.match_bm25(n.note_id, 'EI complaint reduced payment') AS score\nFROM l2.agent_notes n\nWHERE score IS NOT NULL AND n.note_text IS NOT NULL AND n.case_id = 'CS-2026-453815'\nORDER BY score DESC, ts DESC\nLIMIT 20\n;\nSELECT t.transcript_id AS id, t.case_id, t.c360_id, t.call_start_ts AS ts, t.direction AS extra, t.transcript_text AS body, fts_l2_call_transcripts.match_bm25(t.transcript_id, 'EI complaint reduced payment') AS score\nFROM l2.call_transcripts t\nWHERE score IS NOT NULL AND t.transcript_text IS NOT NULL AND t.case_id = 'CS-2026-453815'\nORDER BY score DESC, ts DESC\nLIMIT 20"
+      ],
+      "warnings": [
+        "Removed 1 customer name mention(s) from the answer."
+      ],
+      "refusal_rule": null,
+      "tool_calls": 3,
+      "latency_s": 33.34,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "most recent call summary",
+          "case CS-2026-453815",
+          "2026-09-27"
+        ],
+        "answer_text": "In the most recent call on September 27, 2026, the customer stated he is currently waiting for Employment Insurance (EI) benefits after applying in August and does not have sufficient funds. He complained about the frequency of contact attempts and requested a payment reduction. He agreed to a promise to pay $50 by October 17, 2026, and accepted a 'Skip Payment' hardship offer; the call was subsequently escalated to a Team Lead due to his complaint.",
+        "table": null,
+        "insight": "The customer's delinquency is linked to a delay in EI benefits, and while he made a small payment promise, he expressed significant frustration with the bank's contact frequency.",
+        "follow_ups": [
+          "What is the status of the complaint escalated to the Team Lead?",
+          "Has the customer broken any previous promises to pay?",
+          "What are the terms of the HP-CARD-SKIP hardship program?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "customer",
+            "detail": "Customer record C360-CAY-2435",
+            "ids": [
+              "C360-CAY-2435",
+              "CS-2026-453815"
+            ],
+            "sql": null
+          },
+          {
+            "kind": "transcripts",
+            "detail": "1 transcripts matching \"*\"",
+            "ids": [
+              "7510825",
+              "CS-2026-453815"
+            ],
+            "sql": null
+          },
+          {
+            "kind": "notes",
+            "detail": "1 notes matching \"EI complaint reduced payment\"",
+            "ids": [
+              "N-7538100",
+              "CS-2026-453815"
+            ],
+            "sql": null
+          },
+          {
+            "kind": "transcripts",
+            "detail": "1 transcripts matching \"EI complaint reduced payment\"",
+            "ids": [
+              "7510825",
+              "CS-2026-453815"
+            ],
+            "sql": null
+          }
+        ],
+        "warnings": [
+          "Removed 1 customer name mention(s) from the answer."
+        ],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3-flash-preview",
+          "tool_calls": 3,
+          "latency_ms": 33321
+        }
+      }
+    },
+    {
+      "id": "BQ-108",
+      "question": "In September 2026, what share of payment links sent by SMS were clicked?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "In September 2026, 12.11% of payment links sent via SMS were clicked. Out of 38,321 links sent during this period, 4,639 were clicked by customers. The click rate remained relatively stable throughout the month, ranging from 11.54% to 12.68% on a weekly basis. [table: 4 rows]",
+      "tools": [
+        "run_sql",
+        "run_sql",
+        "run_sql"
+      ],
+      "governed": [
+        false,
+        false,
+        false
+      ],
+      "sql": [
+        "SELECT * FROM l2.ops_events WHERE start_ts <= '2026-09-28' AND (end_ts >= '2026-09-01' OR end_ts IS NULL) LIMIT 51",
+        "SELECT COUNT(*) AS links_sent, COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS links_clicked, CAST(COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS DOUBLE) / COUNT(*) AS click_rate FROM l2.contact_history WHERE channel = 'sms' AND NOT payment_link_id IS NULL AND is_duplicate = FALSE AND CAST(contact_ts_local AS DATE) BETWEEN '2026-09-01' AND '2026-09-28' LIMIT 51",
+        "SELECT DATE_TRUNC('WEEK', CAST(contact_ts_local AS DATE)) AS week_start, COUNT(*) AS links_sent, COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS links_clicked, CAST(COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS DOUBLE) / COUNT(*) AS click_rate FROM l2.contact_history WHERE channel = 'sms' AND NOT payment_link_id IS NULL AND is_duplicate = FALSE AND CAST(contact_ts_local AS DATE) BETWEEN '2026-09-01' AND '2026-09-28' GROUP BY 1 ORDER BY 1 LIMIT 51"
+      ],
+      "warnings": [
+        "`affected_customers_est` is 35,000, larger than the biggest table in the query (6 rows): a join is probably multiplying rows. Count DISTINCT ids."
+      ],
+      "refusal_rule": null,
+      "tool_calls": 3,
+      "latency_s": 37.74,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "payment link click rate",
+          "SMS channel",
+          "September 2026",
+          "2026-09-01 to 2026-09-28"
+        ],
+        "answer_text": "In September 2026, 12.11% of payment links sent via SMS were clicked. Out of 38,321 links sent during this period, 4,639 were clicked by customers. The click rate remained relatively stable throughout the month, ranging from 11.54% to 12.68% on a weekly basis.",
+        "table": {
+          "columns": [
+            "Week Starting",
+            "Links Sent",
+            "Links Clicked",
+            "Click Rate"
+          ],
+          "rows": [
+            [
+              "2026-08-31",
+              7897,
+              944,
+              0.1195
+            ],
+            [
+              "2026-09-07",
+              8266,
+              1048,
+              0.1268
+            ],
+            [
+              "2026-09-14",
+              10411,
+              1291,
+              0.124
+            ],
+            [
+              "2026-09-21",
+              11747,
+              1356,
+              0.1154
+            ]
+          ]
+        },
+        "insight": "Despite a mobile app outage on September 14 and a platform release on September 26, SMS payment link engagement remained consistent at approximately 12%.",
+        "follow_ups": [
+          "What share of clicked SMS links resulted in a payment?",
+          "How does the SMS click rate compare to email payment links in September?",
+          "Did the app outage on September 14 affect the payment completion rate for clicked links?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [],
+            "sql": "SELECT * FROM l2.ops_events WHERE start_ts <= '2026-09-28' AND (end_ts >= '2026-09-01' OR end_ts IS NULL) LIMIT 51"
+          },
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [],
+            "sql": "SELECT COUNT(*) AS links_sent, COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS links_clicked, CAST(COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS DOUBLE) / COUNT(*) AS click_rate FROM l2.contact_history WHERE channel = 'sms' AND NOT payment_link_id IS NULL AND is_duplicate = FALSE AND CAST(contact_ts_local AS DATE) BETWEEN '2026-09-01' AND '2026-09-28' LIMIT 51"
+          },
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [],
+            "sql": "SELECT DATE_TRUNC('WEEK', CAST(contact_ts_local AS DATE)) AS week_start, COUNT(*) AS links_sent, COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS links_clicked, CAST(COUNT(CASE WHEN link_clicked_flag = TRUE THEN 1 END) AS DOUBLE) / COUNT(*) AS click_rate FROM l2.contact_history WHERE channel = 'sms' AND NOT payment_link_id IS NULL AND is_duplicate = FALSE AND CAST(contact_ts_local AS DATE) BETWEEN '2026-09-01' AND '2026-09-28' GROUP BY 1 ORDER BY 1 LIMIT 51"
+          }
+        ],
+        "warnings": [
+          "`affected_customers_est` is 35,000, larger than the biggest table in the query (6 rows): a join is probably multiplying rows. Count DISTINCT ids."
+        ],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3-flash-preview",
+          "tool_calls": 3,
+          "latency_ms": 37727
+        }
+      }
+    },
+    {
+      "id": "BQ-112",
+      "question": "What was the promise-kept rate for promises due between 1 and 20 September 2026, by the channel the promise was taken on?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "For promises due between 1 and 20 September 2026, the web channel had the highest promise-kept rate at 43.98%, followed closely by IVR at 43.12%. The call channel, which handled the largest volume of promises (over 18,000), had a kept rate of 34.86%. [table: 5 rows]",
+      "tools": [
+        "compute_metric"
+      ],
+      "governed": [
+        true
+      ],
+      "sql": [
+        "SELECT p.ptp_channel AS channel, count(*) FILTER (WHERE p.ptp_status = 'kept') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'kept') AS DOUBLE) / nullif(count(*), 0) AS value\nFROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id\nWHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '2026-09-01' AND DATE '2026-09-20'\n  AND p.ptp_status IN ('kept', 'partially_kept', 'broken')\nGROUP BY ALL\nORDER BY value DESC NULLS LAST, channel\nLIMIT 51"
+      ],
+      "warnings": [
+        "number not found in results: 18,000"
+      ],
+      "refusal_rule": null,
+      "tool_calls": 1,
+      "latency_s": 9.88,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "promise_kept_rate",
+          "2026-09-01 to 2026-09-20",
+          "channel"
+        ],
+        "answer_text": "For promises due between 1 and 20 September 2026, the web channel had the highest promise-kept rate at 43.98%, followed closely by IVR at 43.12%. The call channel, which handled the largest volume of promises (over 18,000), had a kept rate of 34.86%.",
+        "table": {
+          "columns": [
+            "Channel",
+            "Kept Promises",
+            "Total Resolved Promises",
+            "Kept Rate"
+          ],
+          "rows": [
+            [
+              "web",
+              230,
+              523,
+              0.439771
+            ],
+            [
+              "ivr",
+              677,
+              1570,
+              0.43121
+            ],
+            [
+              "app",
+              35,
+              91,
+              0.384615
+            ],
+            [
+              "call",
+              6416,
+              18406,
+              0.348582
+            ],
+            [
+              "sms_reply",
+              157,
+              515,
+              0.304854
+            ]
+          ]
+        },
+        "insight": "Self-serve channels like web and IVR significantly outperform agent-led calls and SMS in promise-kept rates, though they handle much lower volumes.",
+        "follow_ups": [
+          "What is the promise-kept rate by product for the same period?",
+          "How does the broken promise rate compare across these channels?",
+          "What are the most common reasons for broken promises on the call channel?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "governed_metric",
+            "detail": "Governed metric: Promise-kept rate",
+            "ids": [],
+            "sql": "SELECT p.ptp_channel AS channel, count(*) FILTER (WHERE p.ptp_status = 'kept') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'kept') AS DOUBLE) / nullif(count(*), 0) AS value\nFROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id\nWHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '2026-09-01' AND DATE '2026-09-20'\n  AND p.ptp_status IN ('kept', 'partially_kept', 'broken')\nGROUP BY ALL\nORDER BY value DESC NULLS LAST, channel\nLIMIT 51"
+          }
+        ],
+        "warnings": [
+          "number not found in results: 18,000"
+        ],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3-flash-preview",
+          "tool_calls": 1,
+          "latency_ms": 9866
+        }
+      }
+    },
+    {
+      "id": "BQ-113",
+      "question": "Summarise the most recent recorded call on case CS-2026-123126: what did the customer say and agree to?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "On the most recent call on September 27, 2026, the customer stated that their hours at work were reduced in June, making the full past-due amount unaffordable. The customer agreed to a promise to pay $23.08 due on October 10, 2026, and expressed interest in hardship options, resulting in a referral to the hardship team.",
+      "tools": [
+        "run_sql",
+        "search_text",
+        "search_text",
+        "run_sql",
+        "search_text"
+      ],
+      "governed": [
+        false,
+        false
+      ],
+      "sql": [
+        "SELECT contact_id, contact_ts_local, channel, direction FROM l2.contact_history WHERE case_id = 'CS-2026-123126' AND channel = 'call' AND is_duplicate = FALSE ORDER BY contact_ts_local DESC LIMIT 1",
+        "SELECT n.note_id AS id, n.case_id, n.c360_id, n.note_ts AS ts, n.note_type AS extra, n.note_text AS body, CASE WHEN n.note_text ILIKE '%3128646%' THEN 1 ELSE 0 END AS score\nFROM l2.agent_notes n\nWHERE (CASE WHEN n.note_text ILIKE '%3128646%' THEN 1 ELSE 0 END) > 0 AND n.note_text IS NOT NULL\nORDER BY score DESC, ts DESC\nLIMIT 20\n;\nSELECT t.transcript_id AS id, t.case_id, t.c360_id, t.call_start_ts AS ts, t.direction AS extra, t.transcript_text AS body, CASE WHEN t.transcript_text ILIKE '%3128646%' THEN 1 ELSE 0 END AS score\nFROM l2.call_transcripts t\nWHERE (CASE WHEN t.transcript_text ILIKE '%3128646%' THEN 1 ELSE 0 END) > 0 AND t.transcript_text IS NOT NULL\nORDER BY score DESC, ts DESC\nLIMIT 20",
+        "SELECT n.note_id AS id, n.case_id, n.c360_id, n.note_ts AS ts, n.note_type AS extra, n.note_text AS body, 0 AS score\nFROM l2.agent_notes n\nWHERE n.note_text IS NOT NULL AND n.case_id = 'CS-2026-123126'\nORDER BY ts DESC\nLIMIT 20\n;\nSELECT t.transcript_id AS id, t.case_id, t.c360_id, t.call_start_ts AS ts, t.direction AS extra, t.transcript_text AS body, 0 AS score\nFROM l2.call_transcripts t\nWHERE t.transcript_text IS NOT NULL AND t.case_id = 'CS-2026-123126'\nORDER BY ts DESC\nLIMIT 20",
+        "SELECT ptp_id, ptp_amount, ptp_due_date, ptp_status, ptp_channel, ptp_created_ts FROM l2.promises_to_pay WHERE case_id = 'CS-2026-123126' ORDER BY ptp_created_ts DESC LIMIT 51",
+        "SELECT t.transcript_id AS id, t.case_id, t.c360_id, t.call_start_ts AS ts, t.direction AS extra, t.transcript_text AS body, fts_l2_call_transcripts.match_bm25(t.transcript_id, 'reduced work hours hardship') AS score\nFROM l2.call_transcripts t\nWHERE score IS NOT NULL AND t.transcript_text IS NOT NULL AND t.case_id = 'CS-2026-123126'\nORDER BY score DESC, ts DESC\nLIMIT 20"
+      ],
+      "warnings": [
+        "No notes or transcripts matched: try other keywords or fewer filters."
+      ],
+      "refusal_rule": null,
+      "tool_calls": 5,
+      "latency_s": 45.5,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "case CS-2026-123126",
+          "most recent recorded call summary",
+          "2026-09-27"
+        ],
+        "answer_text": "On the most recent call on September 27, 2026, the customer stated that their hours at work were reduced in June, making the full past-due amount unaffordable. The customer agreed to a promise to pay $23.08 due on October 10, 2026, and expressed interest in hardship options, resulting in a referral to the hardship team.",
+        "table": null,
+        "insight": "The customer previously broke a promise to pay of $14.24 due on September 20, 2026, following reduced hours and lost overtime.",
+        "follow_ups": [
+          "What is the current status and total overdue amount on case CS-2026-123126?",
+          "Has a hardship program offer been extended or accepted for case CS-2026-123126?",
+          "What are the terms and eligibility criteria for the reduced payment hardship program?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [
+              "CT-3128646"
+            ],
+            "sql": "SELECT contact_id, contact_ts_local, channel, direction FROM l2.contact_history WHERE case_id = 'CS-2026-123126' AND channel = 'call' AND is_duplicate = FALSE ORDER BY contact_ts_local DESC LIMIT 1"
+          },
+          {
+            "kind": "notes",
+            "detail": "Text search found nothing for \"CT-3128646\"",
+            "ids": [],
+            "sql": null
+          },
+          {
+            "kind": "notes",
+            "detail": "2 notes matching \"*\"",
+            "ids": [
+              "N-3038364",
+              "N-3032828",
+              "CS-2026-123126"
+            ],
+            "sql": null
+          },
+          {
+            "kind": "transcripts",
+            "detail": "1 transcripts matching \"*\"",
+            "ids": [
+              "3010363",
+              "CS-2026-123126"
+            ],
+            "sql": null
+          },
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [
+              "PTP-3012067",
+              "PTP-3010093"
+            ],
+            "sql": "SELECT ptp_id, ptp_amount, ptp_due_date, ptp_status, ptp_channel, ptp_created_ts FROM l2.promises_to_pay WHERE case_id = 'CS-2026-123126' ORDER BY ptp_created_ts DESC LIMIT 51"
+          },
+          {
+            "kind": "transcripts",
+            "detail": "1 transcripts matching \"reduced work hours hardship\"",
+            "ids": [
+              "3010363",
+              "CS-2026-123126"
+            ],
+            "sql": null
+          }
+        ],
+        "warnings": [
+          "No notes or transcripts matched: try other keywords or fewer filters."
+        ],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3.7-flash",
+          "tool_calls": 5,
+          "latency_ms": 45457
+        }
+      }
+    },
+    {
+      "id": "BQ-114",
+      "question": "During what hours may we make collection calls, and what applies on Sundays?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "Under POL-COLL-001 \u00a75.1, collection calls and SMS messages may only be made between 07:00 and 21:00 in the customer's local time. Where Sunday contact is permitted, calls are strictly limited to the window of 13:00 to 17:00 local time. Contact is completely prohibited on statutory holidays.",
+      "tools": [
+        "search_policy"
+      ],
+      "governed": [],
+      "sql": [],
+      "warnings": [],
+      "refusal_rule": null,
+      "tool_calls": 1,
+      "latency_s": 16.3,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "permitted collection contact hours",
+          "Sunday contact rules",
+          "POL-COLL-001 \u00a75.1"
+        ],
+        "answer_text": "Under POL-COLL-001 \u00a75.1, collection calls and SMS messages may only be made between 07:00 and 21:00 in the customer's local time. Where Sunday contact is permitted, calls are strictly limited to the window of 13:00 to 17:00 local time. Contact is completely prohibited on statutory holidays.",
+        "table": null,
+        "insight": "Always check the customer's specific local time zone (particularly for half-hour zones like Newfoundland or non-DST regions like Saskatchewan) to avoid out-of-hours breaches.",
+        "follow_ups": [
+          "What are the weekly contact attempt caps under bank policy?",
+          "How many out-of-hours contact attempts occurred in the last 90 days?",
+          "What are the rules regarding contact on statutory holidays?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "policy",
+            "detail": "Policy sections matching \"permitted collection call hours Sunday\"",
+            "ids": [
+              "REG-SUM-001",
+              "POL-COLL-001 \u00a75.1",
+              "POL-COLL-001 \u00a75.3",
+              "FAQ-COLL-001 Q2"
+            ],
+            "sql": null
+          }
+        ],
+        "warnings": [],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3.7-flash",
+          "tool_calls": 1,
+          "latency_ms": 16281
+        }
+      }
+    },
+    {
+      "id": "BQ-115",
+      "question": "How many open cases are on insolvency hold, and how much is overdue on them?",
+      "tags": [
+        "benchmark",
+        "split:extra"
+      ],
+      "group": null,
+      "expected": {
+        "kind": "manual"
+      },
+      "passed": null,
+      "detail": "manual review",
+      "status": "answered",
+      "got": "There are 6,581 open collections cases currently on insolvency hold, with a total overdue balance of $9,305,609.24.",
+      "tools": [
+        "run_sql"
+      ],
+      "governed": [
+        false
+      ],
+      "sql": [
+        "SELECT COUNT(*) AS total_insolvency_cases, COUNT(CASE WHEN is_open = TRUE THEN 1 END) AS open_insolvency_cases_by_flag, SUM(CASE WHEN is_open = TRUE THEN total_overdue ELSE 0 END) AS total_overdue_by_flag, COUNT(CASE WHEN is_open = TRUE AND case_status = 'insolvency_hold' THEN 1 END) AS open_cases_status_insolvency, SUM(CASE WHEN is_open = TRUE AND case_status = 'insolvency_hold' THEN total_overdue ELSE 0 END) AS total_overdue_status_insolvency FROM l2.collections_cases WHERE insolvency_hold_flag = TRUE OR case_status = 'insolvency_hold' LIMIT 51"
+      ],
+      "warnings": [
+        "number not found in results: $1,414"
+      ],
+      "refusal_rule": null,
+      "tool_calls": 1,
+      "latency_s": 17.29,
+      "trap_hits": [],
+      "validator_rules": [],
+      "personal_data": [],
+      "stopped": null,
+      "answer": {
+        "status": "answered",
+        "interpretation": [
+          "open cases",
+          "insolvency hold",
+          "overdue amount",
+          "2026-09-28"
+        ],
+        "answer_text": "There are 6,581 open collections cases currently on insolvency hold, with a total overdue balance of $9,305,609.24.",
+        "table": null,
+        "insight": "The average overdue amount for a case on insolvency hold is approximately $1,414.",
+        "follow_ups": [
+          "What is the breakdown of insolvency cases by product type?",
+          "How many insolvency cases were opened in the last 90 days?",
+          "What is the total exposure for cases on insolvency hold?"
+        ],
+        "refusal": null,
+        "sources": [
+          {
+            "kind": "sql",
+            "detail": "Custom query \u2014 not a governed metric",
+            "ids": [],
+            "sql": "SELECT COUNT(*) AS total_insolvency_cases, COUNT(CASE WHEN is_open = TRUE THEN 1 END) AS open_insolvency_cases_by_flag, SUM(CASE WHEN is_open = TRUE THEN total_overdue ELSE 0 END) AS total_overdue_by_flag, COUNT(CASE WHEN is_open = TRUE AND case_status = 'insolvency_hold' THEN 1 END) AS open_cases_status_insolvency, SUM(CASE WHEN is_open = TRUE AND case_status = 'insolvency_hold' THEN total_overdue ELSE 0 END) AS total_overdue_status_insolvency FROM l2.collections_cases WHERE insolvency_hold_flag = TRUE OR case_status = 'insolvency_hold' LIMIT 51"
+          }
+        ],
+        "warnings": [
+          "number not found in results: $1,414"
+        ],
+        "meta": {
+          "snapshot_date": "2026-09-28",
+          "build_ts": "20261004T141506",
+          "model": "gemini-3-flash-preview",
+          "tool_calls": 1,
+          "latency_ms": 17274
+        }
+      }
+    }
+  ]
+}

@@ -714,3 +714,31 @@ which model wrote it.
   - All three were rendered in headless Firefox.
 - **Tests:** `tests/layer2/test_api_http.py` (7), plus a mount test in `tests/layer3`. Layer 2: **574 passed**.
   Layer 3 + features: **51 passed**.
+
+## Live benchmark runs and fixes (2026-10-04, 19:00–20:30 IST)
+
+- **First live run (free-tier Flash rotation with Flash-Lite as overflow):** 35 benchmark + 15 extra questions
+  answered, with no model errors. Review found:
+  - two answers with figures and no query behind them (BQ-035, BQ-112), both from `gemini-3.5-flash-lite`;
+  - a customer name in BQ-104;
+  - BQ-108 could not be answered (payment-link click columns were not in the serving database);
+  - the roll-rate metric used the stored snapshot bucket, which holds 51,053 rows with dpd 0 labelled 1-30.
+- **Fixes (general, no benchmark text in prompts or code):**
+  - the agent sends back a final answer that has figures but no successful tool result (once); the output guard marks
+    any such answer `partial`;
+  - customer names touched by a question are removed from answers;
+  - `roll_rate` works out buckets from dpd;
+  - `prior_broken_promises` groups 3 or more;
+  - `contact_history` gains `sms_delivered_flag`, `payment_link_id`, `link_clicked_flag`, `link_click_ts` and
+    `link_payment_flag`;
+  - semantic notes: disputes are counted from contact records, and plain contact counts report both as-loaded and
+    de-duplicated figures;
+  - the prompt tells the model to keep group labels as returned;
+  - the evaluation saves after every question.
+  - Serving build `l2_20261004T141506`; doctor 0 errors / 0 warnings.
+- **Re-ask (full Flash models only, new free-tier key):** 19 benchmark + 6 extra questions, merged over the first
+  run; a new answer never replaces an old one if it hit a model error (none did).
+  - Final file: 50 rows, 41 answered / 8 refused / 1 partial.
+  - No answer without a tool result, no Flash-Lite answers, no customer names.
+  - Dev questions with a numeric or refusal key: 12 of 15 match (was 10).
+- **Not done:** a Pro-model run (no Pro quota on the available keys); the acceptance report's example section.

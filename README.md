@@ -166,6 +166,27 @@ missing leading zeros; 127,543 contacts loaded twice; 119,208 conflicting duplic
 ~3.7% stored buckets that disagree with DPD; month-end dates in four formats; `channel` renamed to `channel_v2`;
 9,918 bureau rows with a shifted column (DFI-0812); province written six ways.
 
+## Layer 2 results on the real benchmark (4 Oct, live)
+
+Submission file: `outputs/layer2/benchmark_answers.csv`, 50 rows (35 benchmark + 15 extra questions). Each row has the
+answer, the SQL or sources behind it, and whether it was refused.
+
+- **Models:** a rotation of Gemini Flash models on the free tier: `gemini-3.8-flash`, `3.7-flash`, `3.6-flash`,
+  `3-flash-preview` and `3.5-flash`. Each answer records the model that wrote it. No Pro model was available to this
+  key, so these are Flash results.
+- **What we could check:** of the 15 dev questions with a numeric or refusal key, **12 match the official answer**.
+  The three that do not:
+  - **BQ-006:** our answer gives both the count as loaded (875 / 566, the official figures) and the count without
+    double-loaded contacts (816 / 547).
+  - **BQ-011:** 15 of 16 hourly rows match; we leave out double-loaded contacts, which the official figures count.
+  - **BQ-017:** 3 of 7 products match. The official calculation only counts accounts present at both snapshots and
+    skips one date format; ours keeps every account in the starting bucket.
+- **Not checkable by us:** the 14 test questions and the 15 extra questions have no published answers.
+- **Refusals:** 8 of the 50 are refusals (personal details, protected attributes, out of scope).
+- **Safety fixes after the first run:** an answer with figures but no query behind it is sent back once and otherwise
+  marked "partial" (two such answers came from a lighter model in the first run and were re-asked); customer names
+  are removed from answers. Details: `CHANGELOG_LAYER2.md`.
+
 ## What changed from our design, and why
 
 | Design (idea phase) | Build | Why |
