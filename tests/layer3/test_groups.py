@@ -67,3 +67,9 @@ def test_overview_has_the_new_chart_data(client):
     for k in ("hardship_reasons", "products", "due_by_day", "contact_outcomes", "sectors"):
         assert p[k], k
     assert sum(r["cases"] for r in p["products"]) == p["tiles"]["open_cases"]
+
+
+def test_layer2_api_is_mounted_for_the_ask_screen():
+    from c360.layer3 import api
+    assert api.layer2_api is not None
+    assert any(getattr(r, "path", None) == "/api/v1" for r in api.app.routes)

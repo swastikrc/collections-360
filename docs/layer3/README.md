@@ -124,6 +124,27 @@ labels are untouched, and a model can be added for the weaker fields (sentiment,
 - **Groups never feed a decision or the risk model.** They include no protected attributes. Tests:
   `tests/layer3/test_groups.py`.
 
+## ASK screen: plain-English questions answered by Gemini (F10)
+
+- **Typing a question:** type a question in the terminal (F10, or `ASK <question>` in the command bar). It goes to
+  the Layer 2 agent through the Layer 2 HTTP API, which is mounted in this server at `/api/v1`.
+- **What comes back:**
+  - the answer;
+  - how the question was read;
+  - the table, with an automatic bar chart;
+  - **the SQL, or the policy sections, notes, transcripts and records used**;
+  - the checks and the AI's steps;
+  - follow-up questions you can click.
+- **Model, timing, feedback, refusals:** each answer shows which Gemini model answered and how long it took, and has
+  thumbs up/down feedback. Refusals are shown clearly. Follow-up questions keep the conversation's context (5 turns).
+- **Model rotation:** set `C360_L2_MODELS` in `~/.config/c360/layer2.env` and the rotation keeps answering under
+  per-minute limits.
+- **Staff only:** the screen is for staff; it is not in the customer app.
+
+Run: `. ~/.config/c360/layer2.env && uvicorn c360.layer3.api:app --port 8300`, then open
+http://127.0.0.1:8300/terminal and press F10. The Layer 2 API can also run alone:
+`uvicorn c360.api.app:app --port 8000`. See `c360/api/app.py` for the routes.
+
 ## Not done yet
 
 - `C360_L3_SOURCE=api` is written against the SPEC_FRONTEND contract but untested (Layer 2 is a CLI in this repo, with no HTTP API). Use `mongo` for the integrated mode.

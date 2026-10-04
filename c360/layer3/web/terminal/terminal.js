@@ -114,7 +114,7 @@ function errorBox(e) {
 const FKEYS = [
   ["F1", "HELP", "help"], ["F2", "OVERVIEW", "mon"], ["F3", "WORKLIST", "work"], ["F4", "CUSTOMER", "cust"],
   ["F5", "CALL REVIEW", "call"], ["F6", "APPROVALS", "appr"], ["F7", "CALL QUALITY", "qa"], ["F8", "POLICY", "pol"],
-  ["F9", "GROUPS", "groups"],
+  ["F9", "GROUPS", "groups"], ["F10", "ASK", "ask"],
 ];
 function renderShell() {
   const fk = $("#fkeys");
@@ -144,6 +144,7 @@ async function route(input, silent) {
     if (head === "HELP" || head === "?") return viewHelp();
     if (head === "WORK" || head === "WORKLIST") return viewWork(arg);
     if (head === "GROUP" || head === "GROUPS") return viewGroups(arg);
+    if (head === "ASK") return viewAsk(raw.replace(/^\S+\s*/, ""));
     if (head === "AREA" || head === "PINCODE" || head === "POSTAL") return viewGroups("AREA " + arg);
     if (head === "APPR" || head === "APPROVALS") return viewAppr();
     if (head === "QA" || head === "QUALITY") return viewQa();
@@ -176,6 +177,7 @@ function viewHelp(msg) {
     ["WORKLIST [TEAM] [FILTER]", "Cases to work, most urgent first. Filters: HARDSHIP, PROMISE (due now), BROKEN (2+ broken promises), DISPUTE, VULNERABLE, HOLD"],
     ["GROUPS [SECTOR|INDUSTRY|EMPLOYER|AREA|CITY|PROVINCE]", "Compare open cases by job sector, industry, employer, postal area, city or province"],
     ["AREA M5V 2T6", "Everyone behind on payments in a postal area (a full postal code or its first 3 characters)"],
+    ["ASK <question>", "Ask anything about the portfolio in plain English (Gemini, via Layer 2). Shows the SQL or the documents behind every answer"],
     ["CALL 5010384", "Review a recorded call: transcript, what was said, summary, quality score"],
     ["APPROVALS", "Customer requests waiting for a person (hardship plans, stop-contact, disputes, callbacks)"],
     ["QUALITY", "How accurate the automatic call review is, checked against 500 human-labelled calls"],
@@ -716,6 +718,118 @@ function nbaPanel(rec, doc) {
   return panel("NEXT BEST ACTION · CASE " + rec.case_id, box);
 }
 
+// ---------- ASK (Layer 2: plain-English questions, answered by Gemini with the SQL shown) ----------
+async function api2(path, opts = {}) {
+  const res = await fetch("/api/v1" + path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json", "X-C360-User": state.user, "X-C360-Role": state.role },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* empty */ }
+  if (!res.ok) {
+    const err = new Error((data && (data.error || data.detail)) || `Request failed (${res.status})`);
+    err.status = res.status; err.code = data && data.code; err.rid = data && data.request_id;
+    err.retry = res.headers.get("Retry-After");
+    throw err;
+  }
+  return data;
+}
+const ASK_STATUS = { answered: ["ANSWERED", "grn"], refused: ["REFUSED", "red"], partial: ["PARTLY ANSWERED", "yel"] };
+const SOURCE_KIND = { governed_metric: "Official metric", sql: "Database query", policy: "Policy documents", notes: "Agent notes",
+  transcripts: "Call transcripts", customer: "Customer record" };
+function askErrorText(e) {
+  if (e.status === 429) return `Too many questions right now. Try again in ${e.retry || "a few"} seconds. (${e.message})`;
+  if (e.status === 502) return "The AI model is busy or its limit is used up. Wait a minute and ask again. " + e.message;
+  if (e.status === 503) return "The question service is not ready: " + e.message;
+  if (e.status === 404) return "The question service is not running on this server (Layer 2 not mounted).";
+  return e.message;
+}
+// a small bar chart when the table is "label + number"
+function tableChart(t) {
+  if (!t || !t.rows || t.rows.length < 2 || t.rows.length > 25) return null;
+  const numCol = t.columns.findIndex((c, i) => i > 0 && t.rows.every((r) => r[i] === null || typeof r[i] === "number"));
+  if (numCol < 0) return null;
+  const isRate = t.rows.every((r) => r[numCol] === null || (r[numCol] >= 0 && r[numCol] <= 1)) && /rate|share|pct|ratio/i.test(t.columns[numCol]);
+  return hbars(t.rows.filter((r) => r[numCol] !== null), { label: (r) => String(r[0] ?? "—"), value: (r) => Math.abs(r[numCol]),
+    text: (r) => isRate ? fmt.pct(r[numCol]) : Number.isInteger(r[numCol]) ? fmt.int(r[numCol]) : fmt.num(r[numCol], 2), color: () => "var(--cyan)" });
+}
+function answerCard(turn, onAsk) {
+  const a = turn.answer, meta = a.meta || {};
+  const [st, cls] = ASK_STATUS[a.status] || [a.status.toUpperCase(), ""];
+  const fb = h("span", { class: "muted" });
+  const sendFb = async (rating) => { try { await api2("/feedback", { method: "POST", body: { turn_id: turn.turn_id, rating } }); fb.textContent = " thanks, recorded"; } catch (e) { fb.textContent = " " + e.message; } };
+  const t = a.table;
+  const table = t && t.columns ? h("table", null, h("thead", null, h("tr", null, t.columns.map((c) => h("th", null, fmt.label(c))))),
+    h("tbody", null, t.rows.slice(0, 50).map((r) => h("tr", null, r.map((v) => h("td", { class: typeof v === "number" ? "n" : "" },
+      v === null ? "—" : typeof v === "number" ? (Number.isInteger(v) ? fmt.int(v) : fmt.num(v, Math.abs(v) < 1 ? 4 : 2)) : String(v))))))) : null;
+  const sources = (a.sources || []).map((src) => h("div", { class: "src" },
+    h("div", null, h("b", null, SOURCE_KIND[src.kind] || fmt.label(src.kind)), src.detail ? " · " + src.detail : ""),
+    src.sql ? h("pre", { class: "sql" }, src.sql) : null,
+    (src.ids || []).length ? h("div", { class: "muted" }, src.ids.slice(0, 12).join(", ") + (src.ids.length > 12 ? ` … (+${src.ids.length - 12})` : "")) : null));
+  const steps = (turn.trace && turn.trace.steps) || [];
+  return panel(`${turn.question}`, h("div", { class: "ask-card" },
+    h("div", null, h("span", { class: "chip " + cls }, st),
+      (a.interpretation || []).length ? h("span", { class: "muted" }, " read as: ", a.interpretation.map((x) => h("span", { class: "chip" }, x))) : null),
+    h("div", { class: "ask-text" }, a.status === "refused" && a.refusal ? a.refusal.reason || a.answer_text : a.answer_text),
+    a.insight ? h("div", { class: "note", style: "font-size:12px;margin-top:4px" }, "Insight: " + a.insight) : null,
+    t && t.columns ? h("div", { class: "grid g-2", style: "margin-top:8px" }, h("div", null, table), h("div", null, tableChart(t))) : null,
+    sources.length ? h("details", { open: true, style: "margin-top:8px" }, h("summary", null, "HOW WE GOT THIS (SQL and sources)"), sources) : null,
+    (a.warnings || []).length ? h("details", { style: "margin-top:4px" }, h("summary", { class: "muted" }, `CHECKS (${a.warnings.length})`),
+      h("ul", { class: "reasons" }, a.warnings.map((w) => h("li", null, w)))) : null,
+    steps.length ? h("details", { style: "margin-top:4px" }, h("summary", { class: "muted" }, `STEPS THE AI TOOK (${steps.length})`),
+      h("ol", { class: "steps" }, steps.map((x) => h("li", null, h("b", null, x.tool), " ", h("span", { class: "muted" }, JSON.stringify(x.args || {}).slice(0, 220)),
+        x.executed === false ? h("span", { class: "bad" }, ` not run: ${x.note || ""}`) : null)))) : null,
+    (a.follow_ups || []).length ? h("div", { style: "margin-top:8px" }, h("span", { class: "muted" }, "ASK NEXT "),
+      a.follow_ups.map((f) => h("button", { class: "btn small", onclick: () => onAsk(f) }, f))) : null,
+    h("div", { class: "note", style: "margin-top:8px" },
+      `model ${meta.model || "—"} · ${meta.tool_calls ?? 0} tool call(s) · ${meta.latency_ms != null ? (meta.latency_ms / 1000).toFixed(1) + " s" : "—"} · data as of ${meta.snapshot_date || "—"} · `,
+      h("button", { class: "more", onclick: () => sendFb("up"), title: "Good answer" }, "👍"), " ",
+      h("button", { class: "more", onclick: () => sendFb("down"), title: "Wrong or unhelpful" }, "👎"), fb)), st);
+}
+async function viewAsk(initial) {
+  state.askLog = state.askLog || [];
+  const input = h("textarea", { class: "ask-input", placeholder: "Ask about the portfolio in plain English, e.g. What was the promise-kept rate by queue last month?", rows: 2 });
+  const out = h("div", { class: "grid" });
+  const status = h("div", { class: "note" }, "checking the question service…");
+  const exBox = h("div", { class: "filters" });
+  const btn = h("button", { class: "btn approve" }, "ASK");
+  const render = () => out.replaceChildren(...state.askLog.map((t) => t.error ? h("div", { class: "banner" }, h("b", null, "COULD NOT ANSWER"), `${t.question}: ${t.error}`) : answerCard(t, ask)));
+  async function ask(q) {
+    q = (q || input.value).trim();
+    if (!q) return;
+    input.value = ""; btn.disabled = true;
+    const pending = h("div", { class: "loading" }, `THINKING ABOUT: ${q} … (the AI usually takes 10–40 s)`);
+    out.prepend(pending);
+    try {
+      const r = await api2("/ask", { method: "POST", body: { question: q, conversation_id: state.askConv || null, include_trace: true } });
+      state.askConv = r.conversation_id;
+      state.askLog.unshift({ ...r, question: q });
+    } catch (e) {
+      state.askLog.unshift({ question: q, error: askErrorText(e) });
+    }
+    btn.disabled = false; render(); input.focus();
+  }
+  btn.addEventListener("click", () => ask());
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+  const reset = h("button", { class: "btn", onclick: () => { state.askConv = null; state.askLog = []; render(); input.focus(); } }, "NEW CONVERSATION");
+  setView("ask", title("ASK", "plain-English questions about the whole portfolio · answered by Gemini through Layer 2 · every answer shows its SQL or sources"),
+    status, h("div", { class: "ask-bar" }, input, h("div", { class: "bar", style: "margin:0" }, btn, reset)), exBox,
+    h("p", { class: "note" }, "The AI can only read approved, de-identified tables, official metrics, notes, transcripts and current policies. It refuses questions about protected characteristics or personal contact details. Follow-up questions keep the context of this conversation."),
+    out);
+  render();
+  input.focus();
+  api2("/health").then((hl) => {
+    const m = hl.models || {};
+    const models = m.rotation ? `rotation of ${m.rotation.length} Gemini models (${m.rotation.join(", ")})` : (m.single || "no model set");
+    status.replaceChildren(h("span", { class: "chip " + (hl.status === "ok" ? "grn" : hl.status === "degraded" ? "yel" : "red") }, "SERVICE " + hl.status.toUpperCase()),
+      ` ${models}${m.last_used ? " · last answer by " + m.last_used : ""} · data build ${(hl.serving || {}).build_ts || "—"}${m.note ? " · " + m.note : ""}`);
+  }).catch((e) => status.replaceChildren(h("span", { class: "chip red" }, "SERVICE DOWN"), " " + askErrorText(e)));
+  api2("/examples").then((ex) => exBox.replaceChildren(h("span", { class: "muted" }, "TRY "),
+    ...ex.map((x) => h("button", { class: "btn small", title: "route: " + x.route, onclick: () => ask(x.question) }, x.question)))).catch(() => {});
+  if (initial) ask(initial);
+}
+
 // ---------- CALL ----------
 async function viewCall(id) {
   setView("call", loading("CALL " + id));
@@ -824,7 +938,7 @@ async function viewPol(q) {
 // ---------- boot ----------
 $("#cmdForm").addEventListener("submit", (e) => { e.preventDefault(); route($("#cmd").value); });
 document.addEventListener("keydown", (e) => {
-  const m = /^F([1-9])$/.exec(e.key);
+  const m = /^F(10|[1-9])$/.exec(e.key);
   if (m) { e.preventDefault(); const [, , view] = FKEYS[Number(m[1]) - 1];
     route(view === "cust" ? (state.lastCustomer || "HELP") : view === "call" ? (state.lastCall ? "CALL " + state.lastCall : "HELP") : view); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("#cmd").focus(); }

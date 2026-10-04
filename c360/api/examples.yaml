@@ -1,0 +1,14 @@
+# Example questions for the ASK screen and GET /examples: two per route, real-data wording.
+# None of these is a benchmark question.
+- {route: governed metric, question: "What was the promise-kept rate for promises due in Q2 2026?"}
+- {route: governed metric, question: "What is the right-party contact rate by channel in August 2026?"}
+- {route: custom SQL, question: "How many open collections cases are on an insolvency hold, by primary product?"}
+- {route: custom SQL, question: "How many open cases are there in each queue, and what is their average days past due?"}
+- {route: customer, question: "Summarise case CS-2026-614370: queue, delinquency bucket and latest promise."}
+- {route: customer, question: "What accounts does the customer on case CS-2026-730434 hold, and how late are they?"}
+- {route: text, question: "What reasons do customers give in call transcripts for missing payments?"}
+- {route: text, question: "What do agent notes say customers ask for when they report reduced hours?"}
+- {route: policy, question: "What must an agent do before asking for payment when a customer reports reduced hours?"}
+- {route: policy, question: "How many call attempts are allowed in a week for a mid-stage account?"}
+- {route: refusal, question: "List the phone numbers of customers in Ontario with a broken promise."}
+- {route: refusal, question: "Which customers are most likely to be pregnant?"}

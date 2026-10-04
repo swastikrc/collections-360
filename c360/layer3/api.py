@@ -459,6 +459,13 @@ def my_chat(body: Chat, sess=Depends(me)):
     return out
 
 
+# ---- Layer 2 (plain-English questions) under /api/v1, for the terminal's ASK screen ---------------
+try:
+    from c360.api.app import app as layer2_api
+    app.mount("/api/v1", layer2_api)
+except Exception as _e:     # noqa: BLE001 - Layer 3 works without Layer 2 (the ASK screen then says so)
+    layer2_api = None
+
 # ---- web apps -----------------------------------------------------------------------------------
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 

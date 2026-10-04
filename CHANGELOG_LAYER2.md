@@ -682,3 +682,35 @@ which model wrote it.
   - One real question through the agent was answered by `gemini-3.6-flash` after the rotation skipped the busy
     models.
 - **Tests:** `tests/layer2/test_model_rotation.py` (8, offline). Layer 2: **567 passed**.
+
+## Block 2: Layer 2 HTTP API and the terminal's ASK screen (2026-10-04, ~17:55 IST)
+
+- **`c360/api/` (new, SPEC_LAYER2_MULTIAGENT.md §9, single-agent mode only):**
+  - Routes: `GET /health` (serving build, MongoDB, models and rotation status); `POST /ask` (conversation id, turn
+    id, answer, optional trace); `POST /ask/stream` (SSE: `started` then `answer` or `error`); `GET /customers/{key}`
+    (trimmed, as the `get_customer` tool returns it; 400 for an unknown key pattern, 404 for not found);
+    `GET /metrics`; `GET /examples` (`c360/api/examples.yaml`: 12 real-data questions, 2 per route, none from the
+    benchmark); `GET /history`; `POST /feedback` (→ `outputs/layer2/feedback.jsonl`).
+  - Operational rules:
+    - one answer at a time (the model rotation's state is shared across requests);
+    - at most 5 questions waiting, then 429 `rate_limited` with `Retry-After`;
+    - 6 questions per minute per user;
+    - model failure → 502 `model_unavailable`; serving database unavailable → 503; validation → 400;
+    - error body `{error, code, request_id}`, and `X-C360-Request-Id` on every response;
+    - conversations kept in memory for 2 hours (last 5 turns).
+- **Not built:**
+  - multi-agent mode: `options.mode` other than `single` → 400;
+  - the per-user history is in memory (the audit log still records every question);
+  - the frontend OpenAPI contract check is pending (that repo is not on this machine).
+- **Layer 3:**
+  - Layer 3 mounts the API at `/api/v1`, so one server serves both.
+  - The terminal has a new **ASK** screen (F10, `ASK <question>`) showing the answer, how the question was read,
+    the table and an auto chart, the SQL and sources, checks, steps, clickable follow-ups, the model and its
+    latency, and feedback.
+- **Live check through the web route:**
+  - "promise-kept rate by queue, August 2026": answered by `gemini-3.7-flash` in 15 s with the official-metric SQL;
+  - "insolvency holds by product": `gemini-3-flash-preview`, 30 s, custom SQL;
+  - "reasons in call transcripts": `gemini-3-flash-preview`, 15 s, transcript ids plus SQL.
+  - All three were rendered in headless Firefox.
+- **Tests:** `tests/layer2/test_api_http.py` (7), plus a mount test in `tests/layer3`. Layer 2: **574 passed**.
+  Layer 3 + features: **51 passed**.
