@@ -652,3 +652,33 @@ Layer 3 UI work, requested by the user. Full description: `docs/layer3/README.md
   - Syntax checked with `gjs`. Rendered with headless Firefox on the real data (overview, groups by employer, postal
     area L4W, customer CS-2026-730434).
 - **Tests:** `tests/layer3/test_groups.py` (5 new). `tests/layer3` + `tests/features`: **50 passed**.
+
+## Model rotation across Gemini Flash models (2026-10-04, ~17:35 IST)
+
+**Decision (user, 4 Oct):** rotate between the Gemini Flash models so long runs keep going under per-minute and daily
+request limits. This replaces the earlier instruction "on HTTP 429, stop; do not switch models". Each answer records
+which model wrote it.
+
+- **New:** `c360/layer2/llm/rotation.py`, `RotatingGeminiLLM`, switched on by
+  `C360_L2_MODELS="m1,m2,..."` (priority order; an optional `:rpm` per model paces requests).
+  - **Per-minute 429:** the model cools down for the API's retry delay, and the next model takes over.
+  - **Daily 429:** the model is parked for the rest of the run.
+  - **503 overloaded:** 20 s cool-down.
+  - **All models busy:** waits if one is free within `C360_L2_MAX_WAIT` (75 s); otherwise it returns a model error,
+    and `--resume-from` asks again later.
+- **Switching models mid-question:** earlier model turns are replayed without their thoughts and with Gemini's
+  documented placeholder signature for history from another model.
+- **Wiring and records:**
+  - `get_llm()` uses the rotation when `C360_L2_MODELS` is set.
+  - Evaluation reports name the pool (`rotation: …`), and `Answer.meta.model` is the model that answered.
+  - `scripts/layer2_live.sh` checks quota on every model in the pool and continues if any has quota.
+  - The acceptance report lists the pool.
+  - `GeminiLLM.call_once()` added (one request; errors raised for classification).
+- **Pool in `~/.config/c360/layer2.env`:** `gemini-3.8-flash, gemini-3.7-flash, gemini-3.6-flash,
+  gemini-3-flash-preview, gemini-3.5-flash`.
+- **Live check, 17:30:**
+  - 3.8 / 3.7 / 3.6 / 3-preview answered; 3.5 was briefly overloaded (503); `gemini-2.5-flash` returned 404 (closed
+    to this key) and is left out.
+  - One real question through the agent was answered by `gemini-3.6-flash` after the rotation skipped the busy
+    models.
+- **Tests:** `tests/layer2/test_model_rotation.py` (8, offline). Layer 2: **567 passed**.

@@ -152,7 +152,7 @@ def run_set(name, limit=None, fake=False, delay=0.0, questions_dir=None, synthet
     if not fake and llm is None:
         from c360.layer2.llm import get_llm
         llm = get_llm()
-    model = "fake-plan" if fake else getattr(llm, "name", "unknown")
+    model = "fake-plan" if fake else getattr(llm, "label", None) or getattr(llm, "name", "unknown")
     results = []
     asked = 0
     for q in questions:

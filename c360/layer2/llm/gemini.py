@@ -118,6 +118,11 @@ class GeminiLLM:
         return LLMTurn(text="".join(texts) or None, tool_calls=calls, raw=content, usage=usage)
 
     # ---- the call ----------------------------------------------------------------------------------
+    def call_once(self, system: str, messages: list[Message], tools: list[ToolSpec]) -> LLMTurn:
+        """One request, no retries; provider errors are raised (the model rotation classifies them)."""
+        return self._turn(self._client.models.generate_content(model=self.name, contents=self._contents(messages),
+                                                               config=self._config(system, tools)))
+
     def generate(self, system: str, messages: list[Message], tools: list[ToolSpec]) -> LLMTurn:
         contents = self._contents(messages)
         cfg = self._config(system, tools)

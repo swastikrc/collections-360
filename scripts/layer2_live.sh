@@ -29,20 +29,26 @@ step() { printf '\n==== %s ====\n' "$*"; }
 
 step "0. preconditions"
 [ -n "${GEMINI_API_KEY:-}" ] || { echo "GEMINI_API_KEY is not set (expected in $ENV_FILE)"; exit 2; }
-[ -n "${C360_L2_MODEL:-}" ] || { echo "C360_L2_MODEL is not set"; exit 2; }
-echo "key: set (length ${#GEMINI_API_KEY}) · model: $C360_L2_MODEL"
+[ -n "${C360_L2_MODEL:-}${C360_L2_MODELS:-}" ] || { echo "set C360_L2_MODEL, or C360_L2_MODELS for the model rotation"; exit 2; }
+echo "key: set (length ${#GEMINI_API_KEY}) · model: ${C360_L2_MODELS:+rotation }${C360_L2_MODELS:-$C360_L2_MODEL}"
 podman start c360-mongo >/dev/null 2>&1 || true
 python3 - <<'EOF'
 import os, sys
 from google import genai
 from google.genai import types, errors
-try:
-    genai.Client().models.generate_content(model=os.environ["C360_L2_MODEL"], contents="Reply ok",
-                                           config=types.GenerateContentConfig(max_output_tokens=20))
-    print("quota check: ok")
-except errors.APIError as e:
-    print(f"quota check: HTTP {e.code} — {str(e.message)[:200]}")
-    sys.exit(3 if e.code == 429 else 4)
+from c360.layer2.llm.rotation import parse_pool, classify
+pool = [n for n, _ in parse_pool(os.environ.get("C360_L2_MODELS", ""))] or [os.environ["C360_L2_MODEL"]]
+client, ok = genai.Client(), []
+for m in pool:                                   # one tiny request per model
+    try:
+        client.models.generate_content(model=m, contents="Reply ok", config=types.GenerateContentConfig(max_output_tokens=20))
+        print(f"quota check {m}: ok"); ok.append(m)
+    except errors.APIError as e:
+        kind, delay = classify(e)
+        print(f"quota check {m}: HTTP {e.code} ({kind}{f', retry in {delay:.0f}s' if delay else ''})")
+if not ok:
+    sys.exit(3)
+print(f"{len(ok)} of {len(pool)} model(s) usable now")
 EOF
 
 latest() { ls -1t $OUT/eval_"$1"_*.json 2>/dev/null | while read -r f; do python3 -c "import json,sys; sys.exit(0 if not json.load(open('$f')).get('fake') else 1)" && { echo "$f"; break; }; done; }

@@ -11,6 +11,7 @@ Re-run after every evaluation round; nothing in it is typed by hand.
 import argparse
 import datetime as dt
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -67,7 +68,8 @@ def build(examples=False) -> str:
     L += ["## 1. Environment", "",
           f"- Date: {dt.date.today()} · machine: {platform.node()} ({platform.system()} {platform.release()})",
           f"- Python {platform.python_version()} · DuckDB {duckdb.__version__}",
-          f"- Model (single mode): `{s.model or 'not set'}`",
+          (f"- Models (rotation, priority order): `{os.environ['C360_L2_MODELS']}`; each answer records the model that wrote it"
+           if os.environ.get("C360_L2_MODELS") else f"- Model (single mode): `{s.model or 'not set'}`"),
           f"- Serving build: `{b.get('build_ts')}` · snapshot {b.get('snapshot_date')} · text search {b.get('text_search_mode')} "
           f"· layer2 {b.get('l2_version')}",
           f"- Layer 1 pipeline version (MongoDB `lineage.pipeline_version`): {pipeline}", ""]
@@ -164,7 +166,7 @@ def build(examples=False) -> str:
 
     # 7. examples
     L += ["## 7. Example answers (one per route)", ""]
-    if examples and s.model:
+    if examples and (s.model or os.environ.get("C360_L2_MODELS")):
         from c360.layer2 import ask
         from c360.layer2.agent import Agent
         from c360.layer2.llm import get_llm
