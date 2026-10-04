@@ -16,12 +16,12 @@ import secrets
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from c360.layer3 import actions, assistant, config, hardship, nba, postcall
+from c360.layer3 import actions, assistant, config, conversation, hardship, nba, postcall
 from c360.layer3.data.source import BadKey, NotFound, get_source
 from c360.layer3.policy import library
 from c360.layer3.util import as_date
@@ -103,14 +103,14 @@ def case_peers(case_id: str):
 # ---- employee: customer 360 + next best action ------------------------------------------------------
 @app.get("/api/l3/customers/{key}")
 def customer(key: str):
-    doc = src().customer_doc(key)
+    doc = conversation.overlay(src().customer_doc(key), actions.store())
     doc["interactions"] = actions.store().list(c360_id=doc["_id"], limit=30)
     return doc
 
 
 @app.get("/api/l3/cases/{case_id}/nba")
 def case_nba(case_id: str):
-    doc = src().customer_doc(case_id)
+    doc = conversation.overlay(src().customer_doc(case_id), actions.store())
     rec = nba.recommend(doc, case_id)
     rec["history"] = actions.store().list(case_id=case_id, types=["nba_decision"], limit=10)
     rec["program_name"] = src().program_names().get(rec.get("program")) if rec.get("program") else None
@@ -155,14 +155,14 @@ def _apply_edits(rec, e: Edits | None):
 
 @app.post("/api/l3/cases/{case_id}/check")
 def check(case_id: str, body: Decision):
-    doc = src().customer_doc(case_id)
+    doc = conversation.overlay(src().customer_doc(case_id), actions.store())
     rec = _apply_edits(nba.recommend(doc, case_id), body.edits)
     return {"conflicts": nba.check(rec, doc), "recommendation": rec}
 
 
 @app.post("/api/l3/cases/{case_id}/decision")
 def decide(case_id: str, body: Decision, user=Depends(employee)):
-    doc = src().customer_doc(case_id)
+    doc = conversation.overlay(src().customer_doc(case_id), actions.store())
     original = nba.recommend(doc, case_id)
     final = _apply_edits(original, body.edits) if body.decision == "edit" else original
     conflicts = nba.check(final, doc)
@@ -188,7 +188,7 @@ def decide(case_id: str, body: Decision, user=Depends(employee)):
 def approvals(status: str = "pending", limit: int = 50):
     return {"items": actions.store().list(status=status, limit=limit,
                                           types=["hardship_request", "cease_request", "dispute_request", "callback_request",
-                                                 "contact_preference"])}
+                                                 "contact_preference", "vulnerability_flag", "insolvency_check", "conduct_alert"])}
 
 
 class Approval(BaseModel):
@@ -203,15 +203,81 @@ def approve_request(item_id: str, body: Approval, user=Depends(employee)):
     item = actions.store().get(item_id)
     if not item:
         raise HTTPException(404, {"error": "No such request."})
-    if item["type"] == "hardship_request" and body.status == "approved":
+    if (item["payload"] or {}).get("approver_level") and body.status == "approved":
         needed = (item["payload"] or {}).get("approver_level") or "agent"
         level = {"agent": 0, "hardship_specialist": 1, "team_lead": 2, "admin": 3}
         if level.get(user["role"], 0) < level.get(needed, 0):
-            raise HTTPException(403, {"error": f"This plan needs a {needed.replace('_', ' ')} to approve.", "needed": needed})
+            raise HTTPException(403, {"error": f"This needs a {needed.replace('_', ' ')} to approve.", "needed": needed})
     out = actions.store().decide(item_id, body.status, user["id"], body.reason)
     if out is None:
         raise HTTPException(409, {"error": "This request was already decided."})
     return out
+
+
+# ---- employee: log a conversation (paste a transcript or notes -> facts, follow-ups, checks) ----------
+def _conv_case(case_id):
+    doc = conversation.overlay(src().customer_doc(case_id), actions.store())
+    case = nba.pick_case(doc, case_id)
+    if case is None:
+        raise NotFound(f"No case '{case_id}'")
+    return doc, case
+
+
+@app.post("/api/l3/cases/{case_id}/conversations/extract")
+def conversation_extract(case_id: str, body: dict = Body(...), user=Depends(employee)):
+    """Read the pasted text and return a draft for the agent to review. Writes nothing."""
+    doc, case = _conv_case(case_id)
+    try:
+        return conversation.extract(conversation.clean_input(body), doc, case)
+    except conversation.ConvError as e:
+        raise HTTPException(e.status, e.detail)
+
+
+@app.post("/api/l3/cases/{case_id}/conversations")
+def conversation_save(case_id: str, body: dict = Body(...), user=Depends(employee)):
+    """Save a reviewed conversation: the server re-runs the extraction, applies the agent's corrections and
+    writes the log plus the chosen follow-ups. Needs confirm: true."""
+    doc, case = _conv_case(case_id)
+    try:
+        out = conversation.save(body, doc, case, user, actions.store())
+    except conversation.ConvError as e:
+        raise HTTPException(e.status, e.detail)
+    after = conversation.overlay(src().customer_doc(case_id), actions.store())
+    out["effects"] = [e for e in after.get("_overlay", []) if e["case_id"] == case_id]
+    out["nba"] = nba.recommend(after, case_id)
+    return out
+
+
+def _conv_public(item, full=False):
+    p = dict(item.get("payload") or {})
+    if not full:
+        p.pop("turns_masked", None)
+        p.pop("text_masked", None)
+    return dict(item, payload=p)
+
+
+def _followups(case_id):
+    out = {}
+    for it in actions.store().list(case_id=case_id, types=list(conversation.FOLLOW_UP_TYPES), limit=200):
+        cid = (it.get("payload") or {}).get("conversation_id")
+        if cid and it.get("source") == conversation.SOURCE:
+            out.setdefault(cid, []).append({"id": it["id"], "type": it["type"], "status": it["status"], "decided_by": it.get("decided_by"),
+                                            "payload": {k: (it["payload"] or {}).get(k) for k in ("amount", "date", "reason", "note", "dispute_type", "approver_level")}})
+    return out
+
+
+@app.get("/api/l3/cases/{case_id}/conversations")
+def conversation_list(case_id: str, limit: int = 10):
+    items = actions.store().list(case_id=case_id, types=["conversation_log"], limit=min(limit, 50))
+    return {"items": [_conv_public(i) for i in items], "followups": _followups(case_id)}
+
+
+@app.get("/api/l3/conversations/{conversation_id}")
+def conversation_get(conversation_id: str):
+    for it in actions.store().list(types=["conversation_log"], limit=500):
+        if (it.get("payload") or {}).get("conversation_id") == conversation_id:
+            return {"conversation": _conv_public(it, full=True), "followups": _followups(it["case_id"]).get(conversation_id, [])}
+    raise HTTPException(404, {"error": "No such conversation."})
 
 
 # ---- employee: calls (post-call summary and QA) ------------------------------------------------------

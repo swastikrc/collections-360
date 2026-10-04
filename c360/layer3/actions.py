@@ -16,7 +16,9 @@ import uuid
 from c360.layer3 import config
 
 TYPES = {"nba_decision", "hardship_request", "promise", "payment", "cease_request", "callback_request",
-         "dispute_request", "contact_preference", "assistant_message", "postcall_review"}
+         "dispute_request", "contact_preference", "assistant_message", "postcall_review",
+         # logged from a conversation in the terminal (c360/layer3/conversation.py)
+         "conversation_log", "vulnerability_flag", "insolvency_check", "conduct_alert"}
 
 
 class ActionStore:
@@ -35,7 +37,8 @@ class ActionStore:
         c.row_factory = sqlite3.Row
         return c
 
-    def add(self, type_, c360_id, case_id, payload, source, actor, status="recorded"):
+    def add(self, type_, c360_id, case_id, payload, source, actor, status="recorded", mirror_exclude=()):
+        """`mirror_exclude`: payload keys kept in the local store only, never sent to MongoDB (data minimisation)."""
         if type_ not in TYPES:
             raise ValueError(f"unknown interaction type {type_}")
         item = {"id": f"INT-{uuid.uuid4().hex[:12]}", "ts": dt.datetime.now().isoformat(timespec="seconds"),
@@ -44,7 +47,7 @@ class ActionStore:
         with self._lock, self._conn() as c:
             c.execute("INSERT INTO interactions (id, ts, c360_id, case_id, type, source, status, actor, payload) "
                       "VALUES (:id, :ts, :c360_id, :case_id, :type, :source, :status, :actor, :payload)", item)
-        _mirror(item)
+        _mirror(item, mirror_exclude)
         return self.get(item["id"])
 
     def decide(self, id_, status, by, reason=None, decision=None):
@@ -91,12 +94,13 @@ def _row(r):
     return d
 
 
-def _mirror(item):
+def _mirror(item, exclude=()):
     if os.environ.get("C360_L3_WRITEBACK", "").lower() != "mongo":
         return
     try:
         from c360.store import C360Store
-        C360Store().append_interaction(item["c360_id"], item["type"], json.loads(item["payload"]),
+        payload = {k: v for k, v in json.loads(item["payload"]).items() if k not in set(exclude)}
+        C360Store().append_interaction(item["c360_id"], item["type"], payload,
                                        source=item["source"], case_id=item["case_id"], written_by=item["actor"])
     except Exception:  # noqa: BLE001 - the local store is the record; Mongo is a mirror
         pass
