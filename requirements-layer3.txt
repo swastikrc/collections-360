@@ -1,0 +1,4 @@
+# Layer 3 (terminal, customer app, engines). Install together with requirements-layer2.txt.
+fastapi==0.118.0
+uvicorn==0.37.0
+httpx==0.28.1

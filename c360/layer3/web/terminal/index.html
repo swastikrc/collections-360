@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C360 Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/terminal/terminal.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">C360<span>TERMINAL</span></div>
+  <form class="cmd" id="cmdForm" autocomplete="off">
+    <span class="prompt">&gt;</span>
+    <input id="cmd" spellcheck="false" placeholder="Type a case id (CS-2026-614370) · OVERVIEW · WORKLIST HARDSHIP · GROUPS SECTOR · AREA M5V 2T6 · HELP" aria-label="Command">
+    <button type="submit" class="go">GO</button>
+  </form>
+  <div class="status" id="status"></div>
+</header>
+<nav class="fkeys" id="fkeys" aria-label="Functions"></nav>
+<main id="main" tabindex="-1"></main>
+<footer class="ticker" aria-label="Operations events"><div class="ticker-track" id="ticker"></div></footer>
+<script src="/static/terminal/terminal.js"></script>
+</body>
+</html>
