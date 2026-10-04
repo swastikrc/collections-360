@@ -1,0 +1,348 @@
+{
+  "name": "ptp_risk",
+  "version": "ptp-risk-1.0",
+  "trained_at": "2026-10-04T16:06:29",
+  "features": [
+    "ptp_amount_log",
+    "ptp_cover_ratio",
+    "ptp_full_cover",
+    "ptp_token_payment",
+    "days_to_due",
+    "dpd_at_promise",
+    "dpd_120_plus",
+    "promise_number_in_case",
+    "prior_broken_in_case",
+    "self_serve_promise",
+    "instalment_promise",
+    "cust_prior_promises",
+    "cust_prior_kept_rate",
+    "contacts_30d",
+    "inbound_30d",
+    "rpc_rate_90d",
+    "hardship_flagged_90d",
+    "dispute_flagged_90d",
+    "has_salary_history",
+    "salary_gap_months_3m",
+    "salary_change_pct",
+    "has_bureau",
+    "bureau_score",
+    "bureau_score_change",
+    "bureau_utilisation",
+    "has_call_text",
+    "txt_hedged",
+    "txt_firm",
+    "txt_payday",
+    "txt_hardship",
+    "txt_hardship_ask",
+    "txt_dispute"
+  ],
+  "definitions_version": "ptp-features-1.0",
+  "definitions_sha256": "b3da6eb61198a927",
+  "serving_build": "20261004T100107",
+  "label": "1 if the promise was broken or only partly kept, 0 if kept in full; open and cancelled promises have no label",
+  "C": 0.01,
+  "intercept": -0.7506234740456011,
+  "dropped_wrong_sign": [
+    "prior_broken_in_case",
+    "cust_prior_kept_rate",
+    "ptp_amount_log",
+    "txt_hedged"
+  ],
+  "binary": [
+    "ptp_full_cover",
+    "ptp_token_payment",
+    "dpd_120_plus",
+    "self_serve_promise",
+    "instalment_promise",
+    "hardship_flagged_90d",
+    "dispute_flagged_90d",
+    "has_salary_history",
+    "has_bureau",
+    "has_call_text",
+    "txt_hedged",
+    "txt_firm",
+    "txt_payday",
+    "txt_hardship",
+    "txt_hardship_ask",
+    "txt_dispute"
+  ],
+  "train_rows": 190225,
+  "train_base_rate": 0.44760152451044816,
+  "evaluation": {
+    "train": {
+      "from": "2016-10-05 13:22:46",
+      "to": "2026-04-30 23:56:54",
+      "n": 127642,
+      "base_rate": 0.36913398411181275
+    },
+    "test": {
+      "n": 62583,
+      "base_rate": 0.6076410526820383,
+      "mean_predicted": 0.5779225090660274,
+      "auc": 0.8883646232270697,
+      "brier": 0.12383612105238265,
+      "log_loss": 0.39564157340594097,
+      "top_decile_rate": 0.9872163630552893,
+      "top_decile_lift": 1.6246702863439877,
+      "bands": {
+        "high": {
+          "share": 0.5840563731364747,
+          "actual_not_kept": 0.8487086889910265
+        },
+        "medium": {
+          "share": 0.1505041305146765,
+          "actual_not_kept": 0.6015500583926107
+        },
+        "low": {
+          "share": 0.2654394963488487,
+          "actual_not_kept": 0.08066457982181556
+        }
+      },
+      "calibration_deciles": [
+        {
+          "decile": 1,
+          "mean_predicted": 0.019311259514443097,
+          "actual": 0.03451030516056878,
+          "n": 6259
+        },
+        {
+          "decile": 2,
+          "mean_predicted": 0.026819209630569225,
+          "actual": 0.05256430739734782,
+          "n": 6259
+        },
+        {
+          "decile": 3,
+          "mean_predicted": 0.28596474378110387,
+          "actual": 0.32033871225435373,
+          "n": 6259
+        },
+        {
+          "decile": 4,
+          "mean_predicted": 0.5981107473422504,
+          "actual": 0.6168104825822947,
+          "n": 6258
+        },
+        {
+          "decile": 5,
+          "mean_predicted": 0.6723326686893526,
+          "actual": 0.655161393416427,
+          "n": 6258
+        },
+        {
+          "decile": 6,
+          "mean_predicted": 0.7347808546762031,
+          "actual": 0.7702141259188239,
+          "n": 6258
+        },
+        {
+          "decile": 7,
+          "mean_predicted": 0.7908141759213025,
+          "actual": 0.8139980824544583,
+          "n": 6258
+        },
+        {
+          "decile": 8,
+          "mean_predicted": 0.8382122536761488,
+          "actual": 0.8732821987855545,
+          "n": 6258
+        },
+        {
+          "decile": 9,
+          "mean_predicted": 0.8808874791757585,
+          "actual": 0.9525407478427612,
+          "n": 6258
+        },
+        {
+          "decile": 10,
+          "mean_predicted": 0.9322156791279063,
+          "actual": 0.9872163630552893,
+          "n": 6258
+        }
+      ]
+    },
+    "test_period": [
+      "2026-05-01",
+      "2026-09-01"
+    ],
+    "chosen_C": 0.01,
+    "dropped_wrong_sign": [
+      "prior_broken_in_case",
+      "cust_prior_kept_rate",
+      "ptp_amount_log",
+      "txt_hedged"
+    ],
+    "validation_log_loss_by_C": {
+      "0.01": 0.35177572158975207,
+      "0.1": 0.3523265407652692,
+      "1.0": 0.352401140927408
+    },
+    "gbm_comparison": {
+      "auc": 0.9361646736544981,
+      "brier": 0.09629308702560466
+    },
+    "within_period_auc": 0.8925627891977831
+  },
+  "weights": {
+    "ptp_amount_log": {
+      "coef_per_sd": 0.0,
+      "mean": 4.84656581778374,
+      "sd": 1.5296592301371394
+    },
+    "ptp_cover_ratio": {
+      "coef_per_sd": 0.895744524168328,
+      "mean": 0.7501261026902228,
+      "sd": 0.267476000409898
+    },
+    "ptp_full_cover": {
+      "coef_per_sd": -2.918969875672515,
+      "mean": 0.40215534235773426,
+      "sd": 0.4903329715314562
+    },
+    "ptp_token_payment": {
+      "coef_per_sd": -0.28003547051761685,
+      "mean": 0.03166776186095413,
+      "sd": 0.1751140049215711
+    },
+    "days_to_due": {
+      "coef_per_sd": -0.04304969222996731,
+      "mean": 11.36261795242476,
+      "sd": 5.8148512968038215
+    },
+    "dpd_at_promise": {
+      "coef_per_sd": 0.34044416652727066,
+      "mean": 33.527070574319886,
+      "sd": 28.982182575183632
+    },
+    "dpd_120_plus": {
+      "coef_per_sd": 0.013181927451836911,
+      "mean": 0.00735444867919569,
+      "sd": 0.08544214863766458
+    },
+    "promise_number_in_case": {
+      "coef_per_sd": 0.05153082108850637,
+      "mean": 1.3185175450124853,
+      "sd": 0.6482465079058956
+    },
+    "prior_broken_in_case": {
+      "coef_per_sd": 0.0,
+      "mean": 0.218262583782363,
+      "sd": 0.5228537391169312
+    },
+    "self_serve_promise": {
+      "coef_per_sd": -0.007340325141779269,
+      "mean": 0.1601577079773952,
+      "sd": 0.3667522550071405
+    },
+    "instalment_promise": {
+      "coef_per_sd": 0.00932875949135455,
+      "mean": 0.04963070048626626,
+      "sd": 0.21718078657079404
+    },
+    "cust_prior_promises": {
+      "coef_per_sd": 0.010499146161795158,
+      "mean": 0.4687081088185044,
+      "sd": 0.8218784679946289
+    },
+    "cust_prior_kept_rate": {
+      "coef_per_sd": 0.0,
+      "mean": 0.485365060021388,
+      "sd": 0.09652505533039618
+    },
+    "contacts_30d": {
+      "coef_per_sd": 0.02205753843333271,
+      "mean": 3.0886161124983573,
+      "sd": 2.850812067193876
+    },
+    "inbound_30d": {
+      "coef_per_sd": -0.03532616074784066,
+      "mean": 0.2197608095676173,
+      "sd": 0.489796635829765
+    },
+    "rpc_rate_90d": {
+      "coef_per_sd": -0.010577103269485778,
+      "mean": 0.33846468284751596,
+      "sd": 0.13306577057092686
+    },
+    "hardship_flagged_90d": {
+      "coef_per_sd": 0.08525916471197487,
+      "mean": 0.07909055066368774,
+      "sd": 0.26988003901623103
+    },
+    "dispute_flagged_90d": {
+      "coef_per_sd": -0.00153750168089905,
+      "mean": 0.02248915757655408,
+      "sd": 0.14826798497332794
+    },
+    "has_salary_history": {
+      "coef_per_sd": -0.02594023689560828,
+      "mean": 0.24895781311604678,
+      "sd": 0.43240932044131786
+    },
+    "salary_gap_months_3m": {
+      "coef_per_sd": 0.054304900483593044,
+      "mean": 0.4119542646865554,
+      "sd": 0.9979071700052922
+    },
+    "salary_change_pct": {
+      "coef_per_sd": -0.005918527777530623,
+      "mean": 0.0018260795135949294,
+      "sd": 0.18814993180562908
+    },
+    "has_bureau": {
+      "coef_per_sd": -0.011701865876702947,
+      "mean": 0.6894361939808122,
+      "sd": 0.4627244627314014
+    },
+    "bureau_score": {
+      "coef_per_sd": -0.08320524515557234,
+      "mean": 698.8626994348798,
+      "sd": 77.83137320300857
+    },
+    "bureau_score_change": {
+      "coef_per_sd": -0.005859250251586545,
+      "mean": -0.8237876199237745,
+      "sd": 15.898431292123565
+    },
+    "bureau_utilisation": {
+      "coef_per_sd": 0.07014073635765691,
+      "mean": 0.2615118175844395,
+      "sd": 0.23607514535671242
+    },
+    "has_call_text": {
+      "coef_per_sd": -0.02205610817244445,
+      "mean": 0.8166487054803522,
+      "sd": 0.38695425739693984
+    },
+    "txt_hedged": {
+      "coef_per_sd": 0.0,
+      "mean": 0.24877907740833224,
+      "sd": 0.4323055031481686
+    },
+    "txt_firm": {
+      "coef_per_sd": -0.007604078775226581,
+      "mean": 0.5358864502562755,
+      "sd": 0.4987104998774378
+    },
+    "txt_payday": {
+      "coef_per_sd": 0.014829364018387662,
+      "mean": 0.14765672230253646,
+      "sd": 0.3547593757202311
+    },
+    "txt_hardship": {
+      "coef_per_sd": 0.053314713789457145,
+      "mean": 0.18054934945459325,
+      "sd": 0.3846443576423765
+    },
+    "txt_hardship_ask": {
+      "coef_per_sd": 0.04564181084031566,
+      "mean": 0.14778814561703246,
+      "sd": 0.35488985563426756
+    },
+    "txt_dispute": {
+      "coef_per_sd": -0.00031066037018859845,
+      "mean": 0.021143382836115127,
+      "sd": 0.14386222644725263
+    }
+  }
+}

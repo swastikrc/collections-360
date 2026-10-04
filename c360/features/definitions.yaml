@@ -1,0 +1,215 @@
+# Feature store: the ONE definition of every model feature.
+#
+# The batch build (training table for every promise) and the live lookup (one promise, at scoring
+# time) run exactly the same SQL below; the only difference is which promises are in the spine.
+# tests/features/test_feature_store.py proves the two give identical values.
+#
+# Entity: a promise to pay. Point in time ("as_of"): the end of the call in which the promise was
+# made (promises_to_pay.ptp_created_ts, which equals contact_history.contact_ts_local for that call).
+# A feature may only use what existed then: earlier contacts, earlier promises whose grace period
+# had ended, completed salary months, bureau pulls on or before that day, and the note / transcript
+# of the promise call itself (written 2-15 minutes after the promise, during the same contact).
+# Current-state snapshot tables (card_accounts, deposit_accounts, bureau_latest, collections_cases
+# status fields) are NOT used: for an old promise they would show what happened afterwards.
+#
+# Source: the governed Layer 2 serving database only (schema l2): no names, contact details or
+# protected attributes exist there. Excluded on purpose: province, language, agent, the
+# vulnerability flags (a safeguard, never a decision input) and the voice measurements
+# (voice_samples.csv carries customer_accent_region, a proxy for national origin, and covers only
+# 2,000 calls).
+#
+# Placeholders in SQL: {spine_where} is filled by the store ("TRUE" for the batch build,
+# "ptp_id = $ptp_id" for the live lookup); {re:<name>} is replaced by the quoted pattern from
+# `text_patterns` below.
+#
+# `requires: <flag>`: the feature is only meaningful when that 0/1 feature is 1 (explanations skip it otherwise).
+# `expect: up|down`: the direction the feature should push the risk of a broken promise. A fitted weight
+#   with the opposite sign (usually a side effect of correlated features) is not used: the model is refitted
+#   without that feature, so no explanation ever says e.g. "earlier broken promises lower the risk".
+# `reason_group`: features explained together as one reason (their contributions are added).
+# `use_in_model: false` keeps a feature in the store (shown to people) but out of every model.
+
+version: "ptp-features-1.0"
+entity: promise
+key: ptp_id
+
+spine: |
+  SELECT ptp_id, c360_id, case_id, contact_id,
+         ptp_created_ts AS as_of_ts, CAST(ptp_created_ts AS DATE) AS as_of_date,
+         ptp_amount, ptp_due_date, overdue_at_creation, dpd_at_creation, ptp_sequence_in_case,
+         prior_broken_ptp_count, ptp_channel, ptp_type, grace_days
+  FROM l2.promises_to_pay
+  WHERE {spine_where}
+
+# Label for training only; stored in its own table, never in the feature table.
+label:
+  name: not_kept
+  description: "1 if the promise was broken or only partly kept, 0 if kept in full; open and cancelled promises have no label"
+  sql: |
+    SELECT ptp_id, CASE WHEN ptp_status = 'kept' THEN 0 ELSE 1 END AS not_kept, ptp_status,
+           ptp_due_date + CAST(coalesce(grace_days, 0) AS INTEGER) AS resolved_date
+    FROM l2.promises_to_pay
+    WHERE ptp_status IN ('kept', 'broken', 'partially_kept')
+
+# Regular expressions (RE2 syntax, matched against lower-cased text). Validated against the 500
+# hand-labelled agent notes: python -m c360.features validate-text
+text_patterns:
+  hedged: "\\bmaybe\\b|not sure|will try|try to pay|hopefully|\\bmight\\b|should be able|if (i|he|she|they) can|depends on|refuses|peut-être|pas sûr|va essayer|essayer de payer"
+  firm: "\\bptp\\b|promised|can pay|will pay \\$?\\d|promesse|paiera"
+  payday: "payday|pay ?day|paycheque|paycheck|get(s)? paid|next pay\\b|after pay|jour de paie|prochaine paie"
+  hardship: "lost (my |his |her |their )?(job|overtime)|less pay|pay (was |been )?cut|\\d days a week|laid off|mortgage renewed|renewed at (a )?higher rate|split (w/|with|up)|moved out|hard this month|things are hard|financial hardship|money is tight|unexpected (bills|expenses)|serré|dépenses imprévues|attend l'ae|\\bl'ae\\b|position (was )?eliminated|let go|unemployed|plant (closed|shut)|shifts? cut|hours (cut|reduced)|cut back|reduced (hours|income)|fewer shifts|off work|sick|illness|surgery|hospital|medical leave|disabilit|separat|divorc|one income|waiting (for|on) (my )?(ei|employment insurance)|\\bon ei\\b|evacuat|wildfire|flood|rate reset|payment went up|struggling|tight|don't have the money|no income|pas de revenu|mis à pied|perdu (mon|son) (emploi|travail)|heures (coupées|réduites)|malade|hospitalis|chômage|assurance-emploi|sépar|évacu|difficile"
+  hardship_ask: "hardship (options|program|team|plan)|can be reduced|reduce(d)? (the )?(pmt|payment)|payment plan|refer to hardship|peut être réduit|plan de paiement"
+  dispute: "dispute|already (paid|made a payment)|not (been )?applied|never (applied|posted)|late fee|fraud|not my (charge|purchase)|billing error|wrong (amount|balance)|charged twice|double charged|contest|déjà payé|erreur de facturation|frais de retard"
+  distress: "crying|cryig|escalated to (tl|team lead|supervisor)|escaladé|complaint|plainte|rude|upset|angry|hostile|yelling|frustrated|anxious|stressed|hung up|harass|leave me alone|en pleurs|anxieux|fâché|raccroch"
+
+groups:
+  - name: promise
+    source: structured
+    description: "The promise itself, as agreed on the call."
+    sql: |
+      SELECT ptp_id,
+             CAST(ln(1 + greatest(coalesce(ptp_amount, 0), 0)) AS DOUBLE) AS ptp_amount_log,
+             CAST(least(coalesce(ptp_amount / nullif(overdue_at_creation, 0), 1.0), 3.0) AS DOUBLE) AS ptp_cover_ratio,
+             CAST(coalesce(ptp_amount >= 0.99 * overdue_at_creation, TRUE) AS DOUBLE) AS ptp_full_cover,
+             CAST(coalesce(ptp_amount < 0.25 * overdue_at_creation, FALSE) AS DOUBLE) AS ptp_token_payment,
+             CAST(date_diff('day', as_of_date, ptp_due_date) AS DOUBLE) AS days_to_due,
+             CAST(coalesce(dpd_at_creation, 0) AS DOUBLE) AS dpd_at_promise,
+             CAST(coalesce(dpd_at_creation, 0) >= 120 AS DOUBLE) AS dpd_120_plus,
+             CAST(coalesce(ptp_sequence_in_case, 1) AS DOUBLE) AS promise_number_in_case,
+             CAST(coalesce(prior_broken_ptp_count, 0) AS DOUBLE) AS prior_broken_in_case,
+             CAST(ptp_channel IN ('web', 'app', 'ivr', 'sms_reply') AS DOUBLE) AS self_serve_promise,
+             CAST(coalesce(ptp_type, 'single') <> 'single' AS DOUBLE) AS instalment_promise
+      FROM spine
+    features:
+      - {name: ptp_amount_log, expect: up, description: "log(1 + promised amount)", up: "a large promised amount ({ptp_amount})", down: "a small promised amount ({ptp_amount})"}
+      - {name: ptp_cover_ratio, reason_group: cover, description: "promised amount / overdue amount at the promise (capped at 3)", up: "it is a part payment covering {value:.0%} of the overdue amount", down: "it is a part payment covering {value:.0%} of the overdue amount"}
+      - {name: ptp_full_cover, reason_group: cover, expect: down, description: "1 if the promise clears the whole overdue amount (the cover ratio's effect is U-shaped: full and token payments are usually kept, part payments in between usually are not)", up: "the promise clears the whole overdue amount", down: "the promise does not clear the whole overdue amount"}
+      - {name: ptp_token_payment, reason_group: cover, expect: down, description: "1 if the promise is under 25% of the overdue amount (a small good-faith payment)", up: "it is a small good-faith payment (under 25% of the overdue amount)", down: "it is more than a token payment"}
+      - {name: days_to_due, description: "days from the call to the promised date", up: "the payment date is {value:.0f} days away", down: "the payment date is close ({value:.0f} days away)"}
+      - {name: dpd_at_promise, reason_group: dpd, expect: up, description: "days past due when the promise was made", up: "the account was {value:.0f} days late", down: "the account was only {value:.0f} days late"}
+      - {name: dpd_120_plus, reason_group: dpd, expect: up, description: "1 if 120 or more days past due (close to write-off at 181 days)", up: "the account is close to write-off (120+ days late)", down: "the account is under 120 days late"}
+      - {name: promise_number_in_case, reason_group: case_promises, expect: up, description: "this promise's sequence number within the case", up: "this is promise number {value:.0f} on the case", down: "this is an early promise on the case (number {value:.0f})"}
+      - {name: prior_broken_in_case, reason_group: case_promises, expect: up, description: "promises already broken on this case (as recorded at the promise)", up: "{value:.0f} earlier promise(s) on this case were broken", down: "no earlier promise on this case was broken"}
+      - {name: self_serve_promise, description: "1 if made through web, app, IVR or SMS reply rather than with an agent", up: "the promise was made self-serve (web, app, IVR or SMS)", down: "the promise was agreed with an agent"}
+      - {name: instalment_promise, description: "1 if the promise is one instalment of several", up: "it is one instalment of a multi-part promise", down: "it is a single payment promise"}
+
+  - name: promise_history
+    source: structured
+    description: "The customer's earlier promises whose outcome was already known at the call (due date + grace days passed)."
+    sql: |
+      SELECT s.ptp_id,
+             CAST(count(p.ptp_id) AS DOUBLE) AS cust_prior_promises,
+             CAST((count(p.ptp_id) FILTER (WHERE p.ptp_status = 'kept') + 1.0) / (count(p.ptp_id) + 2.0) AS DOUBLE) AS cust_prior_kept_rate
+      FROM spine s
+      LEFT JOIN l2.promises_to_pay p
+        ON p.c360_id = s.c360_id AND p.ptp_id <> s.ptp_id
+       AND p.ptp_status IN ('kept', 'broken', 'partially_kept')
+       AND p.ptp_due_date + CAST(coalesce(p.grace_days, 0) AS INTEGER) < s.as_of_date
+      GROUP BY s.ptp_id
+    features:
+      - {name: cust_prior_promises, description: "the customer's resolved earlier promises (any case)", up: "the customer has {value:.0f} earlier resolved promise(s)", down: "the customer has few earlier promises ({value:.0f})"}
+      - {name: cust_prior_kept_rate, expect: down, description: "share of those kept, smoothed: (kept + 1) / (resolved + 2)", up: "the customer kept most earlier promises ({value:.0%} smoothed)", down: "the customer kept few earlier promises ({value:.0%} smoothed)"}
+
+  - name: contacts
+    source: structured
+    description: "Contact history before the promise call (duplicates removed)."
+    sql: |
+      SELECT s.ptp_id,
+             CAST(count(c.contact_id) FILTER (WHERE c.contact_ts_local >= s.as_of_ts - INTERVAL 30 DAY) AS DOUBLE) AS contacts_30d,
+             CAST(count(c.contact_id) FILTER (WHERE c.direction = 'inbound' AND c.contact_ts_local >= s.as_of_ts - INTERVAL 30 DAY) AS DOUBLE) AS inbound_30d,
+             CAST(coalesce((count(c.contact_id) FILTER (WHERE c.rpc_flag) + 1.0) / (count(c.contact_id) + 2.0), 0.5) AS DOUBLE) AS rpc_rate_90d,
+             CAST(coalesce(bool_or(c.hardship_mentioned_flag), FALSE) AS DOUBLE) AS hardship_flagged_90d,
+             CAST(coalesce(bool_or(c.dispute_raised_flag), FALSE) AS DOUBLE) AS dispute_flagged_90d
+      FROM spine s
+      LEFT JOIN l2.contact_history c
+        ON c.c360_id = s.c360_id AND c.contact_ts_local < s.as_of_ts
+       AND c.contact_ts_local >= s.as_of_ts - INTERVAL 90 DAY
+       AND NOT coalesce(c.is_duplicate, FALSE)
+      GROUP BY s.ptp_id
+    features:
+      - {name: contacts_30d, description: "contacts in the 30 days before the call", up: "{value:.0f} contacts in the previous 30 days", down: "few contacts in the previous 30 days ({value:.0f})"}
+      - {name: inbound_30d, description: "customer-initiated contacts in the 30 days before", up: "the customer contacted the bank {value:.0f} time(s) in 30 days", down: "no customer-initiated contact in 30 days"}
+      - {name: rpc_rate_90d, expect: down, description: "share of 90-day contacts that reached the customer, smoothed", up: "the bank reached the customer on {value:.0%} of recent attempts", down: "the customer was hard to reach ({value:.0%} of recent attempts reached them)"}
+      - {name: hardship_flagged_90d, expect: up, description: "1 if hardship was flagged on any contact in the 90 days before", up: "hardship was flagged on a contact in the last 90 days", down: "no hardship flagged on recent contacts"}
+      - {name: dispute_flagged_90d, description: "1 if a dispute was raised on any contact in the 90 days before", up: "a dispute was raised in the last 90 days", down: "no recent dispute"}
+
+  - name: income
+    source: structured
+    description: "Salary credits into the customer's deposit accounts, completed months before the call."
+    sql: |
+      WITH m AS (
+        SELECT s.ptp_id, h.credit_month, sum(h.credit_amount_total) AS amt, bool_or(h.gap_flag) AS gap,
+               row_number() OVER (PARTITION BY s.ptp_id ORDER BY h.credit_month DESC) AS k
+        FROM spine s
+        JOIN l2.salary_credit_history h
+          ON h.c360_id = s.c360_id AND h.credit_month < strftime(s.as_of_date, '%Y-%m')
+         AND h.credit_month >= strftime(s.as_of_date - INTERVAL 4 MONTH, '%Y-%m')
+        GROUP BY s.ptp_id, h.credit_month)
+      SELECT s.ptp_id,
+             CAST(count(m.credit_month) > 0 AS DOUBLE) AS has_salary_history,
+             CAST(coalesce(sum(CASE WHEN m.gap THEN 1 ELSE 0 END) FILTER (WHERE m.k <= 3), 0) AS DOUBLE) AS salary_gap_months_3m,
+             -- least/greatest skip NULLs in DuckDB, so a missing ratio is handled before clamping
+             CAST(CASE WHEN r.ratio IS NULL THEN 0 ELSE least(greatest(r.ratio - 1, -1), 1) END AS DOUBLE) AS salary_change_pct
+      FROM spine s LEFT JOIN m ON m.ptp_id = s.ptp_id
+      LEFT JOIN (SELECT ptp_id, max(amt) FILTER (WHERE k = 1) / nullif(avg(amt) FILTER (WHERE k BETWEEN 2 AND 4), 0) AS ratio
+                 FROM m GROUP BY ptp_id) r ON r.ptp_id = s.ptp_id
+      GROUP BY s.ptp_id, r.ratio
+    features:
+      - {name: has_salary_history, description: "1 if salary credits are visible for the customer", up: "salary deposits are visible", down: "no salary deposits are visible"}
+      - {name: salary_gap_months_3m, expect: up, requires: has_salary_history, description: "months with a salary gap among the last 3 completed months", up: "salary was missing in {value:.0f} of the last 3 months", down: "salary arrived every month recently"}
+      - {name: salary_change_pct, expect: down, requires: has_salary_history, description: "last month's salary vs the 3 months before (-1..1)", up: "salary rose {value:+.0%} last month", down: "salary fell {value:+.0%} last month"}
+
+  - name: bureau
+    source: structured
+    description: "Credit bureau pulls on or before the call date."
+    sql: |
+      WITH b AS (
+        SELECT s.ptp_id, h.risk_score, h.revolving_utilisation,
+               row_number() OVER (PARTITION BY s.ptp_id ORDER BY h.pull_date DESC) AS k
+        FROM spine s
+        JOIN l2.bureau_history h ON h.c360_id = s.c360_id AND h.pull_date <= s.as_of_date
+                                AND h.risk_score IS NOT NULL)
+      SELECT s.ptp_id,
+             CAST(count(b.risk_score) > 0 AS DOUBLE) AS has_bureau,
+             -- no pull yet: the median of all pulls (715), so "missing" does not read as a very low score; has_bureau marks it
+             CAST(coalesce(max(b.risk_score) FILTER (WHERE b.k = 1), 715) AS DOUBLE) AS bureau_score,
+             CAST(coalesce(max(b.risk_score) FILTER (WHERE b.k = 1) - max(b.risk_score) FILTER (WHERE b.k = 2), 0) AS DOUBLE) AS bureau_score_change,
+             CAST(coalesce(CASE WHEN max(b.revolving_utilisation) FILTER (WHERE b.k = 1) > 2.0 THEN 2.0
+                                ELSE max(b.revolving_utilisation) FILTER (WHERE b.k = 1) END, 0) AS DOUBLE) AS bureau_utilisation
+      FROM spine s LEFT JOIN b ON b.ptp_id = s.ptp_id
+      GROUP BY s.ptp_id
+    features:
+      - {name: has_bureau, description: "1 if a bureau pull exists on or before the call", up: "a bureau record is available", down: "no bureau record before the call"}
+      - {name: bureau_score, reason_group: bureau, expect: down, requires: has_bureau, description: "latest bureau risk score (715, the median, if none)", up: "a good bureau score ({value:.0f})", down: "a weak bureau score ({value:.0f})"}
+      - {name: bureau_score_change, reason_group: bureau, expect: down, requires: has_bureau, description: "change since the previous pull", up: "bureau score improved by {value:.0f} points", down: "bureau score dropped by {abs:.0f} points"}
+      - {name: bureau_utilisation, reason_group: bureau, expect: up, requires: has_bureau, description: "revolving utilisation at the latest pull (capped at 2)", up: "credit lines are {value:.0%} used", down: "credit lines are only {value:.0%} used"}
+
+  - name: call_text
+    source: text
+    description: "The agent note and call transcript of the promise call (same contact_id), matched with the patterns above. Only flags are stored; no text leaves the serving database."
+    sql: |
+      WITH t AS (
+        SELECT s.ptp_id,
+               lower(coalesce((SELECT string_agg(n.note_text, ' ') FROM l2.agent_notes n WHERE n.contact_id = s.contact_id), '')
+                     || ' ' ||
+                     coalesce((SELECT string_agg(ct.transcript_text, ' ') FROM l2.call_transcripts ct WHERE ct.contact_id = s.contact_id), '')) AS txt
+        FROM spine s)
+      SELECT ptp_id,
+             CAST(length(trim(txt)) > 0 AS DOUBLE) AS has_call_text,
+             CAST(regexp_matches(txt, {re:hedged}) AS DOUBLE) AS txt_hedged,
+             CAST(regexp_matches(txt, {re:firm}) AS DOUBLE) AS txt_firm,
+             CAST(regexp_matches(txt, {re:payday}) AS DOUBLE) AS txt_payday,
+             CAST(regexp_matches(txt, {re:hardship}) AS DOUBLE) AS txt_hardship,
+             CAST(regexp_matches(txt, {re:hardship_ask}) AS DOUBLE) AS txt_hardship_ask,
+             CAST(regexp_matches(txt, {re:dispute}) AS DOUBLE) AS txt_dispute,
+             CAST(regexp_matches(txt, {re:distress}) AS DOUBLE) AS txt_distress
+      FROM t
+    features:
+      - {name: has_call_text, description: "1 if the promise call has a note or transcript", up: "the call has a note", down: "the call has no note or transcript"}
+      - {name: txt_hedged, expect: up, requires: has_call_text, description: "hedged commitment ('maybe', 'will try', 'not sure', 'refuses')", up: "the customer hedged the commitment ('maybe', 'will try', 'not sure')", down: "the commitment was not hedged"}
+      - {name: txt_firm, expect: down, requires: has_call_text, description: "firm commitment ('PTP $x', 'promised', 'can pay')", up: "the note records a firm commitment", down: "the note does not record a firm commitment"}
+      - {name: txt_payday, requires: has_call_text, description: "payment tied to payday", up: "the payment is tied to payday", down: "the payment is not tied to payday"}
+      - {name: txt_hardship, reason_group: hardship_text, expect: up, requires: has_call_text, description: "hardship language (job loss, reduced hours, illness, separation, EI, disaster, rate reset, struggling)", up: "the call mentions financial hardship", down: "no hardship language on the call"}
+      - {name: txt_hardship_ask, reason_group: hardship_text, expect: up, requires: has_call_text, description: "the customer asked about reducing the payment or hardship options", up: "the customer asked about hardship options or a smaller payment", down: "no request for a smaller payment"}
+      - {name: txt_dispute, requires: has_call_text, description: "dispute language (already paid, fee wrong, fraud, billing error)", up: "the customer disputed part of the balance", down: "no dispute language"}
+      - {name: txt_distress, requires: has_call_text, use_in_model: false, description: "distress or hostility on the call (crying, upset, hung up). Safeguard signal only: close to vulnerability, so it is shown to the agent and never used by a model", up: "the customer was distressed or upset on the call", down: "no distress noted"}

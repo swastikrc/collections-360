@@ -1,0 +1,402 @@
+{
+  "generated": "2026-10-04T16:07:35",
+  "model": "ptp-risk-1.0",
+  "period": [
+    "2026-05-01",
+    "2026-09-01"
+  ],
+  "overall": {
+    "n": 62583,
+    "actual": 0.6076410526820383,
+    "predicted": 0.5779225090660274,
+    "high_share": 0.5840563731364747,
+    "auc": 0.8883646232270697,
+    "matched": 62575,
+    "gap": -0.029718543616010895
+  },
+  "attributes": {
+    "gender_code": {
+      "reference": "M",
+      "groups": [
+        {
+          "group": "M",
+          "n": 30604,
+          "actual": 0.6097895699908509,
+          "predicted": 0.5801913985005767,
+          "gap": -0.029598171490274217,
+          "high_share": 0.5862305580969808,
+          "auc": 0.886989541724738,
+          "high_when_kept": 0.22927482833696197,
+          "not_high_when_not_kept": 0.1853499089057979,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "F",
+          "n": 30216,
+          "actual": 0.6051098755626159,
+          "predicted": 0.5757579287013513,
+          "gap": -0.029351946861264522,
+          "high_share": 0.5817116759332804,
+          "auc": 0.8897123076123117,
+          "high_when_kept": 0.22175662085149178,
+          "not_high_when_not_kept": 0.1833843797856049,
+          "high_share_ratio": 0.9922916298011323,
+          "flags": []
+        },
+        {
+          "group": "X",
+          "n": 596,
+          "actual": 0.6191275167785235,
+          "predicted": 0.5751287835964956,
+          "gap": -0.04399873318202796,
+          "high_share": 0.587248322147651,
+          "auc": 0.90571015842317,
+          "high_when_kept": 0.19823788546255505,
+          "not_high_when_not_kept": 0.17344173441734417,
+          "high_share_ratio": 1.0017361156572493,
+          "flags": []
+        },
+        {
+          "group": "not recorded",
+          "n": 589,
+          "actual": 0.6112054329371817,
+          "predicted": 0.5768085605602369,
+          "gap": -0.034396872376944776,
+          "high_share": 0.5891341256366723,
+          "auc": 0.8986171761280931,
+          "high_when_kept": 0.20087336244541484,
+          "not_high_when_not_kept": 0.1638888888888889,
+          "high_share_ratio": 1.0049529447068013,
+          "flags": []
+        },
+        {
+          "group": "U",
+          "n": 578,
+          "actual": 0.610726643598616,
+          "predicted": 0.5749623777405248,
+          "gap": -0.035764265858091115,
+          "high_share": 0.583044982698962,
+          "auc": 0.8605854579792257,
+          "high_when_kept": 0.24444444444444444,
+          "not_high_when_not_kept": 0.20113314447592068,
+          "high_share_ratio": 0.9945660024814131,
+          "flags": []
+        }
+      ]
+    },
+    "marital_status": {
+      "reference": "married",
+      "groups": [
+        {
+          "group": "married",
+          "n": 19554,
+          "actual": 0.6028434079983636,
+          "predicted": 0.5751326128324469,
+          "gap": -0.02771079516591668,
+          "high_share": 0.5816201288738877,
+          "auc": 0.8897657766388968,
+          "high_when_kept": 0.22482616533608035,
+          "not_high_when_not_kept": 0.1833220223956566,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "single",
+          "n": 16842,
+          "actual": 0.5996912480703004,
+          "predicted": 0.5697247859579698,
+          "gap": -0.02996646211233056,
+          "high_share": 0.5746942168388552,
+          "auc": 0.8886352508730552,
+          "high_when_kept": 0.21862948679916938,
+          "not_high_when_not_kept": 0.18762376237623762,
+          "high_share_ratio": 0.988092035176908,
+          "flags": []
+        },
+        {
+          "group": "common_law",
+          "n": 7752,
+          "actual": 0.6024251805985552,
+          "predicted": 0.5707746892721947,
+          "gap": -0.03165049132636055,
+          "high_share": 0.5772703818369453,
+          "auc": 0.8873026636670479,
+          "high_when_kept": 0.22290720311486048,
+          "not_high_when_not_kept": 0.18886509635974305,
+          "high_share_ratio": 0.9925213265136401,
+          "flags": []
+        },
+        {
+          "group": "separated",
+          "n": 5226,
+          "actual": 0.6643704554152315,
+          "predicted": 0.6334647689810685,
+          "gap": -0.030905686434163027,
+          "high_share": 0.6465748182166092,
+          "auc": 0.8767688338439066,
+          "high_when_kept": 0.2759407069555302,
+          "not_high_when_not_kept": 0.16618663594470046,
+          "high_share_ratio": 1.1116788881919966,
+          "flags": []
+        },
+        {
+          "group": "not recorded",
+          "n": 4985,
+          "actual": 0.6054162487462387,
+          "predicted": 0.5753497191535232,
+          "gap": -0.030066529592715496,
+          "high_share": 0.5751253761283851,
+          "auc": 0.8922312591153637,
+          "high_when_kept": 0.21352313167259787,
+          "not_high_when_not_kept": 0.18919814446653413,
+          "high_share_ratio": 0.9888333425494102,
+          "flags": []
+        },
+        {
+          "group": "divorced",
+          "n": 3675,
+          "actual": 0.6138775510204082,
+          "predicted": 0.5820930667386965,
+          "gap": -0.031784484281711656,
+          "high_share": 0.5882993197278912,
+          "auc": 0.8900462442335277,
+          "high_when_kept": 0.22692036645525018,
+          "not_high_when_not_kept": 0.18439716312056736,
+          "high_share_ratio": 1.0114837683952504,
+          "flags": []
+        },
+        {
+          "group": "undisclosed",
+          "n": 2776,
+          "actual": 0.6001440922190202,
+          "predicted": 0.5734343905168106,
+          "gap": -0.026709701702209654,
+          "high_share": 0.5821325648414986,
+          "auc": 0.8796929582643869,
+          "high_when_kept": 0.23873873873873874,
+          "not_high_when_not_kept": 0.18907563025210083,
+          "high_share_ratio": 1.0008810492315714,
+          "flags": []
+        },
+        {
+          "group": "widowed",
+          "n": 1773,
+          "actual": 0.5967287084038353,
+          "predicted": 0.559717944837333,
+          "gap": -0.03701076356650235,
+          "high_share": 0.5645798082346306,
+          "auc": 0.8999180403717266,
+          "high_when_kept": 0.18461538461538463,
+          "not_high_when_not_kept": 0.1786389413988658,
+          "high_share_ratio": 0.970701975751338,
+          "flags": []
+        }
+      ]
+    },
+    "citizenship_status": {
+      "reference": "citizen",
+      "groups": [
+        {
+          "group": "citizen",
+          "n": 47440,
+          "actual": 0.6130691399662732,
+          "predicted": 0.5832104513383348,
+          "gap": -0.02985868862793839,
+          "high_share": 0.5897976391231029,
+          "auc": 0.8874387190683001,
+          "high_when_kept": 0.23011549357158423,
+          "not_high_when_not_kept": 0.18319350845825882,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "permanent_resident",
+          "n": 9556,
+          "actual": 0.5944956048555882,
+          "predicted": 0.563330965736718,
+          "gap": -0.03116463911887013,
+          "high_share": 0.5656132272917539,
+          "auc": 0.8923723787838352,
+          "high_when_kept": 0.2072258064516129,
+          "not_high_when_not_kept": 0.18993135011441648,
+          "high_share_ratio": 0.9589954075311223,
+          "flags": []
+        },
+        {
+          "group": "work_permit",
+          "n": 2790,
+          "actual": 0.5985663082437276,
+          "predicted": 0.5650421849069475,
+          "gap": -0.03352412333678012,
+          "high_share": 0.5759856630824373,
+          "auc": 0.8892151411462789,
+          "high_when_kept": 0.21071428571428572,
+          "not_high_when_not_kept": 0.17904191616766468,
+          "high_share_ratio": 0.9765818390504225,
+          "flags": []
+        },
+        {
+          "group": "study_permit",
+          "n": 2151,
+          "actual": 0.5657833565783357,
+          "predicted": 0.5486187016954188,
+          "gap": -0.017164654882916852,
+          "high_share": 0.5560204556020456,
+          "auc": 0.8844545245003423,
+          "high_when_kept": 0.2291220556745182,
+          "not_high_when_not_kept": 0.19309778142974526,
+          "high_share_ratio": 0.9427308939871709,
+          "flags": []
+        },
+        {
+          "group": "not recorded",
+          "n": 646,
+          "actual": 0.5820433436532507,
+          "predicted": 0.5586429436087941,
+          "gap": -0.02340040004445665,
+          "high_share": 0.5634674922600619,
+          "auc": 0.896197793538219,
+          "high_when_kept": 0.1962962962962963,
+          "not_high_when_not_kept": 0.17287234042553193,
+          "high_share_ratio": 0.9553573206868239,
+          "flags": []
+        }
+      ]
+    },
+    "newcomer_program_flag": {
+      "reference": "False",
+      "groups": [
+        {
+          "group": "False",
+          "n": 55982,
+          "actual": 0.6132685506055517,
+          "predicted": 0.5828244563952489,
+          "gap": -0.030444094210302808,
+          "high_share": 0.5893322853774428,
+          "auc": 0.887895103350277,
+          "high_when_kept": 0.22840646651270208,
+          "not_high_when_not_kept": 0.1830653617616218,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "True",
+          "n": 6593,
+          "actual": 0.5596845138783558,
+          "predicted": 0.5361370753274404,
+          "gap": -0.023547438550915456,
+          "high_share": 0.5389048991354467,
+          "auc": 0.8905022091901938,
+          "high_when_kept": 0.2011712022046159,
+          "not_high_when_not_kept": 0.1953929539295393,
+          "high_share_ratio": 0.914433015985711,
+          "flags": []
+        },
+        {
+          "group": "not recorded",
+          "n": 8,
+          "actual": 0.75,
+          "predicted": 0.7117411658196483,
+          "gap": -0.0382588341803517,
+          "high_share": 0.875,
+          "auc": 1.0,
+          "high_when_kept": 0.5,
+          "not_high_when_not_kept": 0.0,
+          "high_share_ratio": 1.4847311469447138,
+          "flags": []
+        }
+      ]
+    },
+    "accessibility_needs_flag": {
+      "reference": "False",
+      "groups": [
+        {
+          "group": "False",
+          "n": 60801,
+          "actual": 0.607720267758754,
+          "predicted": 0.5781790244119489,
+          "gap": -0.02954124334680508,
+          "high_share": 0.5845792009999835,
+          "auc": 0.8880370363162959,
+          "high_when_kept": 0.2259024778835269,
+          "not_high_when_not_kept": 0.18389715832205683,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "True",
+          "n": 1774,
+          "actual": 0.6042841037204059,
+          "predicted": 0.5685273913651236,
+          "gap": -0.035756712355282216,
+          "high_share": 0.5648252536640361,
+          "auc": 0.8989826508483224,
+          "high_when_kept": 0.20085470085470086,
+          "not_high_when_not_kept": 0.19682835820895522,
+          "high_share_ratio": 0.9662082617681981,
+          "flags": []
+        },
+        {
+          "group": "not recorded",
+          "n": 8,
+          "actual": 0.75,
+          "predicted": 0.7117411658196483,
+          "gap": -0.0382588341803517,
+          "high_share": 0.875,
+          "auc": 1.0,
+          "high_when_kept": 0.5,
+          "not_high_when_not_kept": 0.0,
+          "high_share_ratio": 1.496803167993698,
+          "flags": []
+        }
+      ]
+    },
+    "vulnerability_flag": {
+      "reference": "False",
+      "groups": [
+        {
+          "group": "False",
+          "n": 53202,
+          "actual": 0.5870268035036277,
+          "predicted": 0.5587394264794732,
+          "gap": -0.028287377024154514,
+          "high_share": 0.5610503364535168,
+          "auc": 0.8914139159405332,
+          "high_when_kept": 0.2103226981020436,
+          "not_high_when_not_kept": 0.1922128654221767,
+          "high_share_ratio": 1.0,
+          "flags": []
+        },
+        {
+          "group": "True",
+          "n": 9373,
+          "actual": 0.7245278992851808,
+          "predicted": 0.6866932132712803,
+          "gap": -0.0378346860139005,
+          "high_share": 0.7143924037127921,
+          "auc": 0.8552626551225531,
+          "high_when_kept": 0.3516653756777692,
+          "not_high_when_not_kept": 0.1476954793108526,
+          "high_share_ratio": 1.2733124949689425,
+          "flags": [
+            "high-band share ratio outside 0.80-1.25"
+          ]
+        },
+        {
+          "group": "not recorded",
+          "n": 8,
+          "actual": 0.75,
+          "predicted": 0.7117411658196483,
+          "gap": -0.0382588341803517,
+          "high_share": 0.875,
+          "auc": 1.0,
+          "high_when_kept": 0.5,
+          "not_high_when_not_kept": 0.0,
+          "high_share_ratio": 1.5595748601293176,
+          "flags": []
+        }
+      ]
+    }
+  }
+}
