@@ -1,0 +1,146 @@
+# Held-out questions for the synthetic world. Written BEFORE any tuning of semantic.yaml,
+# metrics.yaml or the prompt, and never used to tune them: a failure here is evidence about
+# generalisation, not a to-do. Expected answers are resolved from synth/truth.py at load time
+# (`truth`), so they stay correct if the synthetic world is regenerated.
+# `fake_plan` is used only by the offline fake LLM (`eval --fake`).
+
+- id: H01
+  question: For card cases only, what share of promises due between 1 January and 30 June 2026 were kept?
+  expected: {kind: scalar, unit: ratio, truth: {fn: promise_kept_rate, args: {start: "2026-01-01", end: "2026-06-30", where: {product: card}}}}
+  tags: [governed, promises, filter]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: promise_kept_rate, period: "2026-01-01 to 2026-06-30", filters: [{dimension: product, op: "=", value: card}]}}
+
+- id: H02
+  question: Last month, how did the broken-promise rate differ by the channel the promise was made on?
+  expected: {kind: table, key: [channel], unit: ratio, truth: {fn: broken_promise_rate, args: {start: "2026-08-01", end: "2026-08-31", by: channel}}}
+  tags: [governed, promises]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: broken_promise_rate, period: last month, group_by: [channel]}}
+
+- id: H03
+  question: What was the cure rate in each collections queue in July 2026?
+  expected: {kind: table, key: [queue], unit: ratio, truth: {fn: cure_rate, args: {start: "2026-07-01", end: "2026-07-31", by: queue}}}
+  tags: [governed, cases]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: cure_rate, period: July 2026, group_by: [queue]}}
+
+- id: H04
+  question: Of the accounts sitting in the 31-60 bucket at the end of May 2026, what fraction had rolled to a worse bucket a month later?
+  expected: {kind: scalar, unit: ratio, truth: {fn: roll_rate, args: {start: "2026-05-01", end: "2026-05-31", where: {from_bucket: "31-60"}}}}
+  tags: [governed, roll, filter]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: roll_rate, period: May 2026, filters: [{dimension: from_bucket, op: "=", value: "31-60"}]}}
+
+- id: H05
+  question: How often do outbound attempts reach the right party in the hardship specialist queue, over the last 90 days?
+  expected: {kind: scalar, unit: ratio, truth: {fn: rpc_rate, args: {start: "2026-07-01", end: "2026-09-28", where: {queue: hardship_specialist}}}}
+  tags: [governed, contacts, filter]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: rpc_rate, period: last 90 days, filters: [{dimension: queue, op: "=", value: hardship_specialist}]}}
+
+- id: H06
+  question: This quarter, how many outbound contact attempts did we make on card cases, per channel?
+  expected: {kind: table, key: [channel], unit: count, truth: {fn: contact_attempts, args: {start: "2026-07-01", end: "2026-09-28", by: channel, where: {product: card}}}}
+  tags: [governed, contacts, filter]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: contact_attempts, period: this quarter, group_by: [channel], filters: [{dimension: product, op: "=", value: card}]}}
+
+- id: H07
+  question: How much money was taken in payments on contacts over the last 30 days?
+  expected: {kind: scalar, unit: amount, truth: {fn: payment_on_contact_amount, args: {start: "2026-08-30", end: "2026-09-28"}}}
+  tags: [governed, contacts]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: payment_on_contact_amount, period: last 30 days}}
+
+- id: H08
+  question: Do card customers or loan customers accept hardship offers more often this year?
+  expected: {kind: table, key: [product], unit: ratio, truth: {fn: hardship_offer_acceptance_rate, args: {start: "2026-01-01", end: "2026-09-28", by: product}}}
+  tags: [governed, offers]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: hardship_offer_acceptance_rate, period: year to date, group_by: [product]}}
+
+- id: H09
+  question: Of the promises made in the last 12 months, how many are in each status?
+  expected: {kind: table, key: [status], unit: count, truth: {fn: promise_count, args: {start: "2025-09-29", end: "2026-09-28", by: status}}}
+  tags: [governed, promises]
+  fake_plan:
+    - {tool: compute_metric, args: {metric: promise_count, period: last 12 months, group_by: [status]}}
+
+- id: H10
+  question: How many hardship offers did customers accept in the second quarter of 2026?
+  expected: {kind: scalar, unit: count, truth: {fn: offers_accepted, args: {start: "2026-04-01", end: "2026-06-30"}}}
+  tags: [custom_sql, offers]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS accepted FROM l2.offers WHERE customer_response = 'accepted' AND CAST(offer_ts AS DATE) BETWEEN DATE '2026-04-01' AND DATE '2026-06-30'"}}
+
+- id: H11
+  question: What is the average proposed payment on offers that customers accepted?
+  expected: {kind: scalar, unit: amount, truth: {fn: avg_accepted_offer_payment}}
+  tags: [custom_sql, offers]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT avg(proposed_payment_amount) AS avg_payment FROM l2.offers WHERE customer_response = 'accepted'"}}
+
+- id: H12
+  question: How many open cases have a dispute flagged on them?
+  expected: {kind: scalar, unit: count, truth: {fn: open_cases_with_flag, args: {flag: dispute_flag}}}
+  tags: [custom_sql, cases]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS cases FROM l2.collections_cases WHERE is_open AND dispute_flag"}}
+
+- id: H13
+  question: What is our total exposure on open cases that are coded as hardship?
+  expected: {kind: scalar, unit: amount, truth: {fn: total_exposure_open_hardship}}
+  tags: [custom_sql, cases]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT sum(total_exposure) AS exposure FROM l2.collections_cases WHERE is_open AND hardship_flag"}}
+
+- id: H14
+  question: How many customers still have identity links waiting for human review?
+  expected: {kind: scalar, unit: count, truth: {fn: customers_with_links_pending_review}}
+  tags: [custom_sql, data_quality]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS customers FROM l2.customer_summary WHERE links_pending_review > 0"}}
+
+- id: H15
+  question: How many deposit accounts have a wage garnishment on them?
+  expected: {kind: scalar, unit: count, truth: {fn: deposits_with_garnishment}}
+  tags: [custom_sql]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS accounts FROM l2.deposit_accounts WHERE garnishment_flag"}}
+
+- id: H16
+  question: "Data quality: how many model score rows were superseded by a later score at the same timestamp?"
+  expected: {kind: scalar, unit: count, truth: {fn: superseded_scores}}
+  tags: [custom_sql, data_quality]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: data_quality, query: "SELECT count(*) AS superseded FROM l2.model_scores WHERE dq_superseded_duplicate"}}
+
+- id: H17
+  question: How many unsecured loans are on the book?
+  expected: {kind: scalar, unit: count, truth: {fn: unsecured_loan_count}}
+  tags: [custom_sql, terms]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS loans FROM l2.loan_accounts WHERE secured_flag = false"}}
+
+- id: H18
+  question: For how many collections cases did Layer 1 have to repair the customer link?
+  expected: {kind: scalar, unit: count, truth: {fn: cases_with_repaired_link}}
+  tags: [custom_sql, data_quality]
+  fake_plan:
+    - {tool: run_sql, args: {purpose: analysis, query: "SELECT count(*) AS cases FROM l2.collections_cases WHERE link_method LIKE 'repaired%'"}}
+
+- id: H19
+  subject: {fn: sample_case, args: {which: open_hardship}}
+  question: "Is case {case_id} on a card or a loan, and which queue is working it?"
+  expected: {kind: contains, fields: [primary_product, queue]}
+  tags: [customer]
+  fake_plan:
+    - {tool: get_customer, args: {key: "{case_id}"}}
+
+- id: H20
+  question: What do agent notes say about customers disputing fees?
+  expected: {kind: contains, value: [dispute]}
+  tags: [text]
+  fake_plan:
+    - {tool: search_text, args: {query: dispute late fee, source: notes}}

@@ -1,0 +1,836 @@
+# The Layer 2 serving database: one entry per table in schema `l2`.
+#
+# The `columns` allow-list is the ONLY way a column enters the serving database. `{cols}` in
+# `source` is replaced by "<expression> AS <l2 name>" for each allow-listed column. There is no
+# SELECT * from a source table, anywhere.
+#
+#   required: true       publish aborts (doctor ERROR) if a non-optional column does not bind
+#   required: false      the table is skipped with a warning if its source does not exist
+#   optional: true       the column is skipped with a warning if its source column is missing
+#                        (every INFERRED column is optional)
+#   confidence           confirmed | inferred (see schema/expected_schema.yaml)
+#
+# Never allow-list a column that matches c360/layer2/deny_list.py: publish and the doctor both
+# fail if you do. `src` is Layer 1's c360.duckdb, attached read-only.
+
+customers:
+  grain: one row per person
+  description: Non-identifying customer attributes, consent and servicing flags. No names, dates of birth, contact details or protected attributes.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.golden.crm_person_map pm
+    JOIN src.curated.customers c ON c.crm_customer_id = pm.crm_customer_id
+    GROUP BY pm.c360_id
+  columns:
+    c360_id: pm.c360_id
+    segment: any_value(c.segment) FILTER (WHERE pm.is_master)
+    tenure_months: max(c.tenure_months)
+    customer_since_date: min(c.customer_since_date)
+    province_code: arg_max(c.province_code_std, c.last_profile_update_ts)
+    customer_status: arg_max(c.customer_status, c.last_profile_update_ts)
+    employment_status: arg_max(c.employment_status, c.last_profile_update_ts)
+    occupation_category: arg_max(c.occupation_category, c.last_profile_update_ts)
+    pay_frequency: arg_max(c.pay_frequency, c.last_profile_update_ts)
+    declared_annual_income: arg_max(c.declared_annual_income, c.last_profile_update_ts)
+    income_verified_flag: bool_or(c.income_verified_flag)
+    income_source: arg_max(c.income_source, c.last_profile_update_ts)
+    housing_status: arg_max(c.housing_status, c.last_profile_update_ts)
+    monthly_housing_cost: arg_max(c.monthly_housing_cost, c.last_profile_update_ts)
+    internal_risk_grade: arg_max(c.internal_risk_grade, c.last_profile_update_ts)
+    preferred_language: arg_max(c.preferred_language, c.last_profile_update_ts)
+    preferred_channel: arg_max(c.preferred_channel, c.last_profile_update_ts)
+    # consent: the strictest value across the person's CRM records (as in golden.py)
+    consent_call: bool_and(coalesce(c.consent_call, false))
+    consent_autodialer: bool_and(coalesce(c.consent_autodialer, false))
+    consent_sms: bool_and(coalesce(c.consent_sms, false))
+    consent_email: bool_and(coalesce(c.consent_email, false))
+    voicemail_permitted: bool_and(coalesce(c.voicemail_permitted, false))
+    contact_at_work_permitted: bool_and(coalesce(c.contact_at_work_permitted, false))
+    internal_do_not_call: bool_or(c.internal_do_not_call_flag)
+    cease_communication: bool_or(c.cease_communication_flag)
+    third_party_authorised: bool_or(c.third_party_authorised_flag)
+    credit_counselling_agency: bool_or(c.credit_counselling_agency_flag)
+    power_of_attorney: bool_or(c.power_of_attorney_flag)
+    legal_representative: bool_or(c.legal_representative_flag)
+    deceased: bool_or(c.deceased_flag)
+    bankruptcy: bool_or(c.bankruptcy_flag)
+    consumer_proposal: bool_or(c.consumer_proposal_flag)
+    fraud_victim: bool_or(c.fraud_victim_flag)
+    military_or_reserve: bool_or(c.military_or_reserve_flag)
+    national_dncl_telemarketing_only: bool_or(c.national_dncl_flag)
+    all_crm_records_deleted: bool_and(coalesce(c.is_deleted, false))
+    crm_record_count: count(*)
+
+customer_summary:
+  kind: mongo                 # projected from MongoDB `customers`, not from DuckDB
+  grain: one row per person
+  description: Person-level roll-up from the Collections 360 document - hardship flag and reasons, exposure, open cases, identity link quality.
+  required: true
+  confidence: confirmed
+  collection: customers
+  columns:
+    c360_id: {path: _id, type: VARCHAR}
+    financial_hardship_flag: {path: hardship_indicators.financial_hardship_flag, type: BOOLEAN}
+    hardship_reasons: {path: hardship_indicators.reasons, type: VARCHAR, join: "; "}
+    max_dpd: {path: exposure.max_dpd, type: BIGINT}
+    worst_bucket: {path: exposure.worst_bucket, type: VARCHAR}
+    past_due_total: {path: exposure.past_due_total, type: DOUBLE}
+    card_balance_total: {path: exposure.card_balance_total, type: DOUBLE}
+    loan_outstanding_total: {path: exposure.loan_outstanding_total, type: DOUBLE}
+    delinquent_accounts: {path: exposure.delinquent_accounts, type: BIGINT}
+    product_count: {path: exposure.product_count, type: BIGINT}
+    open_cases: {path: collections.open_cases, type: BIGINT}
+    min_link_confidence: {path: identity.min_link_confidence, type: DOUBLE}
+    links_pending_review: {path: identity.links_pending_review, type: BIGINT}
+
+card_accounts:
+  grain: one row per card account
+  description: Credit card accounts with balances and delinquency (current snapshot).
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.card_accounts a
+    LEFT JOIN src.golden.account_xref x
+      ON x.account_id = a.card_account_id AND x.role = 'primary' AND x.product_family = 'card'
+  columns:
+    months_on_book: {expr: a.months_on_book, optional: true}
+    available_credit: {expr: a.available_credit, optional: true}
+    cycles_delinquent: {expr: a.cycles_delinquent, optional: true}
+    overlimit_flag: {expr: a.overlimit_flag, optional: true}
+    delinquency_start_date: {expr: a.delinquency_start_date, optional: true}
+    times_60dpd_12m: {expr: a.times_60dpd_12m, optional: true}
+    times_90dpd_12m: {expr: a.times_90dpd_12m, optional: true}
+    card_account_id: a.card_account_id
+    c360_id: x.c360_id
+    product_code: a.product_code
+    card_tier: a.card_tier
+    account_status: a.account_status
+    open_date: a.open_date
+    snapshot_date: a.snapshot_date
+    credit_limit: a.credit_limit
+    current_balance: a.current_balance
+    statement_balance: a.statement_balance
+    utilisation: a.utilisation
+    minimum_payment_due: a.minimum_payment_due
+    payment_due_date: a.payment_due_date
+    past_due_amount: a.past_due_amount
+    dpd: a.dpd
+    dpd_bucket: a.dpd_bucket
+    dpd_bucket_recomputed: a.dpd_bucket_recomputed
+    worst_dpd_12m: a.worst_dpd_12m
+    times_30dpd_12m: a.times_30dpd_12m
+    last_payment_date: a.last_payment_date
+    last_payment_amount: a.last_payment_amount
+    autopay_enrolled: a.autopay_enrolled
+    autopay_failed_count_90d: a.autopay_failed_count_90d
+    hardship_program_flag: a.hardship_program_flag
+    hardship_program_type: a.hardship_program_type
+    dispute_open_flag: a.dispute_open_flag
+    chargeoff_flag: a.chargeoff_flag
+    chargeoff_date: a.chargeoff_date
+    chargeoff_amount: a.chargeoff_amount
+    cash_advance_count_90d: a.cash_advance_count_90d
+    dq_dpd_missing: a.dq_dpd_missing
+    dq_bucket_mismatch: a.dq_bucket_mismatch
+    dq_stale_snapshot: a.dq_stale_snapshot
+
+loan_accounts:
+  grain: one row per loan
+  description: Loan accounts with balances and delinquency (current snapshot).
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.loan_accounts a
+    LEFT JOIN src.golden.account_xref x
+      ON x.account_id = a.loan_id AND x.role = 'primary' AND x.product_family = 'loan'
+  columns:
+    times_30dpd_12m: {expr: a.times_30dpd_12m, optional: true}
+    times_60dpd_12m: {expr: a.times_60dpd_12m, optional: true}
+    times_90dpd_12m: {expr: a.times_90dpd_12m, optional: true}
+    delinquency_start_date: {expr: a.delinquency_start_date, optional: true}
+    restructure_type: {expr: a.restructure_type, optional: true}
+    remaining_term_months: {expr: a.remaining_term_months, optional: true}
+    collateral_type: {expr: a.collateral_type, optional: true}
+    loan_id: a.loan_id
+    c360_id: x.c360_id
+    has_co_borrower: a.co_borrower_ref IS NOT NULL
+    product_type: a.product_type
+    product_code: a.product_code
+    secured_flag: a.secured_flag
+    origination_date: a.origination_date
+    maturity_date: a.maturity_date
+    original_amount: a.original_amount
+    interest_rate: a.interest_rate
+    payment_frequency: a.payment_frequency
+    scheduled_payment_amount: a.scheduled_payment_amount
+    next_due_date: a.next_due_date
+    next_due_amount: a.next_due_amount
+    principal_balance: a.principal_balance
+    total_outstanding: a.total_outstanding
+    past_due_amount: a.past_due_amount
+    missed_payments_count: a.missed_payments_count
+    dpd: a.dpd
+    dpd_bucket: a.dpd_bucket
+    dpd_bucket_recomputed: a.dpd_bucket_recomputed
+    worst_dpd_12m: a.worst_dpd_12m
+    last_payment_date: a.last_payment_date
+    last_payment_amount: a.last_payment_amount
+    pad_enrolled: a.pad_enrolled
+    pad_returned_count_90d: a.pad_returned_count_90d
+    deferral_count_life: a.deferral_count_life
+    restructure_flag: a.restructure_flag
+    hardship_program_flag: a.hardship_program_flag
+    hardship_program_type: a.hardship_program_type
+    chargeoff_flag: a.chargeoff_flag
+    chargeoff_date: a.chargeoff_date
+    chargeoff_amount: a.chargeoff_amount
+    repossession_flag: a.repossession_flag
+    snapshot_date: a.snapshot_date
+    dq_dpd_missing: a.dq_dpd_missing
+    dq_bucket_mismatch: a.dq_bucket_mismatch
+    dq_stale_snapshot: a.dq_stale_snapshot
+
+deposit_accounts:
+  grain: one row per deposit account
+  description: Deposit accounts with balances, overdraft and payroll signals (current snapshot).
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.deposit_accounts a
+    LEFT JOIN src.golden.account_xref x
+      ON x.account_id = a.deposit_account_id AND x.role = 'primary' AND x.product_family = 'deposit'
+  columns:
+    product_code: {expr: a.product_code, optional: true}
+    joint_account_flag: {expr: a.joint_account_flag, optional: true}
+    nsf_fee_mtd: {expr: a.nsf_fee_mtd, optional: true}
+    deposit_account_id: a.deposit_account_id
+    c360_id: x.c360_id
+    has_joint_holder: a.joint_holder_ref IS NOT NULL
+    product_type: a.product_type
+    currency: a.currency
+    account_status: a.account_status
+    open_date: a.open_date
+    current_balance: a.current_balance
+    available_balance: a.available_balance
+    overdraft_limit: a.overdraft_limit
+    overdraft_used: a.overdraft_used
+    overdraft_dpd: a.overdraft_dpd
+    overdraft_dpd_bucket: a.overdraft_dpd_bucket
+    overdraft_dpd_bucket_recomputed: a.overdraft_dpd_bucket_recomputed
+    days_negative_mtd: a.days_negative_mtd
+    nsf_count_mtd: a.nsf_count_mtd
+    payroll_deposit_flag: a.payroll_deposit_flag
+    payroll_frequency_detected: a.payroll_frequency_detected
+    last_payroll_date: a.last_payroll_date
+    last_payroll_amount: a.last_payroll_amount
+    expected_next_payroll_date: a.expected_next_payroll_date
+    payroll_delay_days: a.payroll_delay_days
+    payroll_avg_amount_3m: a.payroll_avg_amount_3m
+    payroll_amount_change_pct: a.payroll_amount_change_pct
+    ei_deposit_flag: a.ei_deposit_flag
+    cpp_oas_deposit_flag: a.cpp_oas_deposit_flag
+    other_lender_payment_amount_mtd: a.other_lender_payment_amount_mtd
+    high_cost_lender_txn_flag: a.high_cost_lender_txn_flag
+    essential_spend_amount_mtd: a.essential_spend_amount_mtd
+    net_cash_flow_mtd: a.net_cash_flow_mtd
+    cash_flow_volatility_6m: a.cash_flow_volatility_6m
+    income_to_debt_service_ratio_est: a.income_to_debt_service_ratio_est
+    garnishment_flag: a.garnishment_flag
+    snapshot_date: a.snapshot_date
+    dq_cif_leading_zeros_lost: a.dq_cif_leading_zeros_lost
+    dq_stale_snapshot: a.dq_stale_snapshot
+
+account_monthly_snapshot:
+  grain: one row per account per month-end
+  description: Quarter-end history of every account (cards, loans, mortgages, lines of credit, deposits), plus charged-off accounts after write-off. Used for roll rates.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.account_monthly_snapshot s
+    LEFT JOIN src.golden.account_xref x ON x.account_id = s.account_id AND x.role = 'primary'
+  columns:
+    account_id: s.account_id
+    c360_id: x.c360_id
+    month_end_date: s.month_end_date
+    dpd: s.dpd
+    dpd_bucket: s.dpd_bucket
+    dpd_bucket_recomputed: s.dpd_bucket_recomputed
+    dq_bucket_mismatch: s.dq_bucket_mismatch
+    product_type: {expr: s.product_type, optional: true}
+    account_status: {expr: s.account_status, optional: true}
+    balance: {expr: s.balance, optional: true}
+    limit_or_original_amount: {expr: s.limit_or_original_amount, optional: true}
+    minimum_due: {expr: s.minimum_due, optional: true}
+    payment_made: {expr: s.payment_made, optional: true}
+    overlimit_flag: {expr: s.overlimit_flag, optional: true}
+    write_off_flag: {expr: s.write_off_flag, optional: true}
+    salary_credit_amount: {expr: s.salary_credit_amount, optional: true}
+
+collections_cases:
+  grain: one row per collections case
+  description: Collections cases - stage, treatment, hardship, outcome.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.collections_cases c
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = c.case_id
+  columns:
+    province_code: {expr: c.province_code, optional: true}
+    test_cell: {expr: c.test_cell, optional: true}
+    strategy_code: {expr: c.strategy_code, optional: true}
+    assignment_method: {expr: c.assignment_method, optional: true}
+    assigned_team: {expr: c.assigned_team, optional: true}
+    language_of_service: {expr: c.language_of_service, optional: true}
+    days_in_collections: {expr: c.days_in_collections, optional: true}
+    entry_dpd: {expr: c.entry_dpd, optional: true}
+    max_dpd_episode: {expr: c.max_dpd_episode, optional: true}
+    cure_date: {expr: c.cure_date, optional: true}
+    days_to_cure: {expr: c.days_to_cure, optional: true}
+    promises_total: {expr: c.promises_total, optional: true}
+    promises_kept: {expr: c.promises_kept, optional: true}
+    promises_broken: {expr: c.promises_broken, optional: true}
+    payments_since_open_amount: {expr: c.payments_since_open_amount, optional: true}
+    hardship_source: {expr: c.hardship_source, optional: true}
+    hardship_plan_type: {expr: c.hardship_plan_type, optional: true}
+    dispute_type: {expr: c.dispute_type, optional: true}
+    dispute_status: {expr: c.dispute_status, optional: true}
+    complaint_stage: {expr: c.complaint_stage, optional: true}
+    escalation_flag: {expr: c.escalation_flag, optional: true}
+    agency_placement_flag: {expr: c.agency_placement_flag, optional: true}
+    legal_status: {expr: c.legal_status, optional: true}
+    chargeoff_date: {expr: c.chargeoff_date, optional: true}
+    chargeoff_amount: {expr: c.chargeoff_amount, optional: true}
+    settlement_amount: {expr: c.settlement_amount, optional: true}
+    contact_cap_7d: {expr: c.contact_cap_7d, optional: true}
+    contacts_last_7d: {expr: c.contacts_last_7d, optional: true}
+    contact_cap_breach_count: {expr: c.contact_cap_breach_count, optional: true}
+    out_of_hours_contact_count: {expr: c.out_of_hours_contact_count, optional: true}
+    recidivism_flag: {expr: c.recidivism_flag, optional: true}
+    prior_cases_12m: {expr: c.prior_cases_12m, optional: true}
+    case_id: c.case_id
+    c360_id: cx.c360_id
+    link_method: cx.link_method
+    account_ids: c.account_ids
+    primary_account_id: c.primary_account_id
+    primary_product: c.primary_product
+    case_open_date: c.case_open_date
+    case_open_reason: c.case_open_reason
+    case_status: c.case_status
+    current_dpd: c.current_dpd
+    current_bucket: c.current_bucket
+    current_bucket_recomputed: c.current_bucket_recomputed
+    total_overdue: c.total_overdue
+    total_exposure: c.total_exposure
+    queue: c.queue
+    assigned_agent_id: c.assigned_agent_id
+    current_treatment: c.current_treatment
+    next_scheduled_action: c.next_scheduled_action
+    contact_attempts_total: c.contact_attempts_total
+    rpc_count: c.rpc_count
+    last_contact_ts: c.last_contact_ts
+    last_rpc_ts: c.last_rpc_ts
+    hardship_flag: c.hardship_flag
+    hardship_reason: c.hardship_reason
+    hardship_program_offered: c.hardship_program_offered
+    hardship_program_accepted: c.hardship_program_accepted
+    payment_plan_flag: c.payment_plan_flag
+    plan_instalment_amount: c.plan_instalment_amount
+    settlement_offered_flag: c.settlement_offered_flag
+    dispute_flag: c.dispute_flag
+    complaint_flag: c.complaint_flag
+    cease_contact_flag: c.cease_contact_flag
+    third_party_rep_flag: c.third_party_rep_flag
+    insolvency_hold_flag: c.insolvency_hold_flag
+    deceased_hold_flag: c.deceased_hold_flag
+    legal_referral_flag: c.legal_referral_flag
+    chargeoff_flag: c.chargeoff_flag
+    nba_recommendation_last: c.nba_recommendation_last
+    outcome: c.outcome
+    outcome_date: c.outcome_date
+    cure_flag: c.cure_flag
+    is_open: c.is_open
+    dq_bucket_mismatch: c.dq_bucket_mismatch
+
+promises_to_pay:
+  grain: one row per promise
+  description: Promises to pay made by customers on collections cases.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.promises_to_pay p
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = p.case_id
+  columns:
+    account_id: {expr: p.account_id, optional: true}
+    agent_id: {expr: p.agent_id, optional: true}
+    contact_id: {expr: p.contact_id, optional: true}
+    product: {expr: p.product, optional: true}
+    ptp_type: {expr: p.ptp_type, optional: true}
+    ptp_sequence_in_case: {expr: p.ptp_sequence_in_case, optional: true}
+    prior_broken_ptp_count: {expr: p.prior_broken_ptp_count, optional: true}
+    overdue_at_creation: {expr: p.overdue_at_creation, optional: true}
+    dpd_at_creation: {expr: p.dpd_at_creation, optional: true}
+    grace_days: {expr: p.grace_days, optional: true}
+    paid_date: {expr: p.paid_date, optional: true}
+    broken_reason_agent_coded: {expr: p.broken_reason_agent_coded, optional: true}
+    ptp_id: p.ptp_id
+    case_id: p.case_id
+    c360_id: cx.c360_id
+    ptp_amount: p.ptp_amount
+    ptp_due_date: p.ptp_due_date
+    ptp_status: p.ptp_status
+    ptp_created_ts: p.ptp_created_ts
+    ptp_channel: p.ptp_channel
+    amount_paid_against: p.amount_paid_against
+
+offers:
+  grain: one row per offer
+  description: Hardship and payment-plan offers made on collections cases, with the customer's response.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.offers o
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = o.case_id
+  columns:
+    account_id: {expr: o.account_id, optional: true}
+    agent_id: {expr: o.agent_id, optional: true}
+    contact_id: {expr: o.contact_id, optional: true}
+    nba_recommended_flag: {expr: o.nba_recommended_flag, optional: true}
+    eligibility_result: {expr: o.eligibility_result, optional: true}
+    decline_reason: {expr: o.decline_reason, optional: true}
+    response_ts: {expr: o.response_ts, optional: true}
+    plan_start_date: {expr: o.plan_start_date, optional: true}
+    plan_payments_due: {expr: o.plan_payments_due, optional: true}
+    plan_payments_made: {expr: o.plan_payments_made, optional: true}
+    offer_id: o.offer_id
+    case_id: o.case_id
+    c360_id: cx.c360_id
+    program_id: o.program_id
+    offer_ts: o.offer_ts
+    offered_by: o.offered_by
+    proposed_payment_amount: o.proposed_payment_amount
+    duration_months: o.duration_months
+    customer_response: o.customer_response
+    plan_status: o.plan_status
+
+contact_history:
+  grain: one row per contact attempt or inbound contact
+  description: Every contact with a customer (calls, SMS, email, letters, system events). Some contacts were loaded twice - see is_duplicate.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.contact_history h
+    LEFT JOIN src.golden._g_contact_person gp ON gp.contact_id = h.contact_id
+  columns:
+    source_platform: {expr: h.source_platform, optional: true}
+    sub_channel: {expr: h.sub_channel, optional: true}
+    strategy_code: {expr: h.strategy_code, optional: true}
+    test_cell: {expr: h.test_cell, optional: true}
+    attempt_number_case: {expr: h.attempt_number_case, optional: true}
+    within_permitted_hours_flag: {expr: h.within_permitted_hours_flag, optional: true}
+    stat_holiday_flag: {expr: h.stat_holiday_flag, optional: true}
+    day_of_week: {expr: h.day_of_week, optional: true}
+    consent_status_at_time: {expr: h.consent_status_at_time, optional: true}
+    dial_result: {expr: h.dial_result, optional: true}
+    abandoned_flag: {expr: h.abandoned_flag, optional: true}
+    identity_verified_flag: {expr: h.identity_verified_flag, optional: true}
+    ptp_made_flag: {expr: h.ptp_made_flag, optional: true}
+    payment_method: {expr: h.payment_method, optional: true}
+    callback_requested_flag: {expr: h.callback_requested_flag, optional: true}
+    transferred_flag: {expr: h.transferred_flag, optional: true}
+    transcript_id: {expr: h.transcript_id, optional: true}
+    note_id: {expr: h.note_id, optional: true}
+    inbound_reason: {expr: h.inbound_reason, optional: true}
+    contact_cost_cad: {expr: h.contact_cost_cad, optional: true}
+    system_event_type: {expr: h.system_event_type, optional: true}
+    ops_incident_id: {expr: h.ops_incident_id, optional: true}
+    dpd_at_contact: {expr: h.dpd_at_contact, optional: true}
+    bucket_at_contact: {expr: h.bucket_at_contact, optional: true}
+    agent_site: {expr: h.agent_site, optional: true}
+    contact_id: h.contact_id
+    case_id: h.case_id
+    account_id: h.account_id
+    c360_id: gp.c360_id
+    contact_ts_utc: h.contact_ts_utc
+    contact_ts_local: h.contact_ts_local
+    contact_hour_local: h.contact_hour_local
+    channel: h.channel_std
+    direction: h.direction
+    outcome_code: h.outcome_code
+    agent_id: h.agent_id
+    talk_duration_sec: h.talk_duration_sec
+    sms_template_id: h.sms_template_id
+    letter_template_id: h.letter_template_id
+    email_template_id: h.email_template_id
+    payment_amount: h.payment_amount
+    payment_taken_flag: h.payment_taken_flag
+    ptp_id: h.ptp_id
+    rpc_flag: h.rpc_flag
+    hardship_mentioned_flag: h.hardship_mentioned_flag
+    dispute_raised_flag: h.dispute_raised_flag
+    complaint_raised_flag: h.complaint_raised_flag
+    cease_request_flag: h.cease_request_flag
+    dq_duplicate_of: h.dq_duplicate_of
+    is_duplicate: h.dq_duplicate_of IS NOT NULL
+    dq_channel_renamed: h.dq_channel_renamed
+
+agent_notes:
+  grain: one row per agent note
+  description: Free-text notes written by agents on collections cases. The text is searchable through search_text only.
+  required: true
+  confidence: confirmed
+  text_index: {id: note_id, column: note_text}
+  source: |
+    SELECT {cols}
+    FROM src.curated.agent_notes n
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = n.case_id
+  columns:
+    contact_id: {expr: n.contact_id, optional: true}
+    account_id: {expr: n.account_id, optional: true}
+    note_source: {expr: n.note_source, optional: true}
+    note_id: n.note_id
+    note_ts: n.note_ts
+    note_type: n.note_type
+    agent_id: n.agent_id
+    case_id: n.case_id
+    c360_id: cx.c360_id
+    note_text: n.note_text
+
+call_transcripts:
+  grain: one row per call transcript
+  description: Call transcripts. The text is searchable through search_text only.
+  required: true
+  confidence: confirmed
+  text_index: {id: transcript_id, column: transcript_text}
+  # The publisher reads each transcript JSON file under the dataset root and exposes the parsed
+  # text as the temporary table named here. file_path itself is not copied.
+  # base_dirs: folders under the dataset root that file_path may be relative to, tried in order.
+  # Real release: file_path = transcripts/YYYY/MM/<id>.json under <dataset>/files/.
+  file_text:
+    base_dirs: [files, ""]
+    temp_table: transcript_text_files
+    query: SELECT transcript_id, file_path FROM src.curated.call_transcripts
+    id_column: transcript_id
+    path_column: file_path
+    text_column: transcript_text
+  source: |
+    SELECT {cols}
+    FROM src.curated.call_transcripts t
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = t.case_id
+    LEFT JOIN transcript_text_files tt ON tt.transcript_id = t.transcript_id
+  columns:
+    agent_id: {expr: t.agent_id, optional: true}
+    call_end_ts: {expr: t.call_end_ts, optional: true}
+    transcript_id: t.transcript_id
+    contact_id: t.contact_id
+    case_id: t.case_id
+    c360_id: cx.c360_id
+    call_start_ts: t.call_start_ts
+    duration_sec: t.duration_sec
+    direction: t.direction
+    language: t.language
+    transcript_text: tt.transcript_text
+
+bureau_latest:
+  grain: one row per person (latest bureau pull)
+  description: Latest credit bureau pull per person. Rows hit by load incident DFI-0812 are flagged dq_shifted_row.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.external e
+    LEFT JOIN src.golden.source_customer_xref x ON x.src_system = 'core' AND x.src_ref = e.cif
+    QUALIFY row_number() OVER (PARTITION BY coalesce(x.c360_id, e.cif) ORDER BY e.pull_date DESC) = 1
+  columns:
+    c360_id: x.c360_id
+    pull_date: e.pull_date
+    hit_status: e.hit_status
+    risk_score: e.risk_score
+    risk_score_prev_3m: e.risk_score_prev_3m
+    risk_score_delta_90d: e.risk_score_delta_90d
+    bankruptcy_score: e.bankruptcy_score
+    inquiries_hard_6m: e.inquiries_hard_6m
+    inquiries_hard_3m: e.inquiries_hard_3m_std
+    revolving_utilisation: e.revolving_utilisation
+    total_monthly_obligations: e.total_monthly_obligations
+    total_balance_all_trades: e.total_balance_all_trades
+    off_us_revolving_balance: e.off_us_revolving_balance
+    off_us_delinquent_trades: e.off_us_delinquent_trades
+    collection_items_count: e.collection_items_count
+    high_cost_lender_trades_count: e.high_cost_lender_trades_count
+    bnpl_trades_count: e.bnpl_trades_count
+    new_trades_6m: e.new_trades_6m
+    bankruptcy_on_file_flag: e.bankruptcy_on_file_flag
+    consumer_proposal_on_file_flag: e.consumer_proposal_on_file_flag
+    deceased_indicator: e.deceased_indicator
+    fraud_alert_flag: e.fraud_alert_flag
+    address_mismatch_flag: e.address_mismatch_flag
+    dq_shifted_row: e.dq_shifted_row
+
+bureau_history:
+  grain: one row per person per bureau pull
+  description: History of bureau risk scores.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.bureau_history b
+    LEFT JOIN src.golden.source_customer_xref x ON x.src_system = 'core' AND x.src_ref = b.cif
+  columns:
+    hit_status: {expr: b.hit_status, optional: true}
+    revolving_utilisation: {expr: b.revolving_utilisation, optional: true}
+    delinquent_trades_count: {expr: b.delinquent_trades_count, optional: true}
+    inquiries_hard_6m: {expr: b.inquiries_hard_6m, optional: true}
+    stale_score_flag: {expr: b.stale_score_flag, optional: true}
+    c360_id: x.c360_id
+    pull_date: b.pull_date
+    risk_score: b.risk_score
+
+salary_credit_history:
+  grain: one row per deposit account per month
+  description: Monthly salary credits detected on deposit accounts.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.salary_credit_history s
+    LEFT JOIN src.golden.account_xref x ON x.account_id = s.deposit_account_id AND x.role = 'primary'
+  columns:
+    account_type: {expr: s.account_type, optional: true}
+    employer_flag: {expr: s.employer_flag, optional: true}
+    first_credit_date: {expr: s.first_credit_date, optional: true}
+    deposit_account_id: s.deposit_account_id
+    c360_id: x.c360_id
+    credit_month: s.credit_month
+    credit_amount_total: s.credit_amount_total
+    gap_flag: s.gap_flag
+    last_credit_date: s.last_credit_date
+
+model_scores:
+  grain: one row per model score
+  description: Scores from the bank's existing models. Rows scored twice at the same timestamp are flagged dq_superseded_duplicate.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.model_scores m
+    LEFT JOIN src.golden.crm_person_map pm ON pm.crm_customer_id = m.crm_customer_id
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = m.case_id
+  columns:
+    entity_type: {expr: m.entity_type, optional: true}
+    slot_label: {expr: m.slot_label, optional: true}
+    risk_grade: {expr: m.risk_grade, optional: true}
+    predicted_value: {expr: m.predicted_value, optional: true}
+    score_id: m.score_id
+    c360_id: coalesce(pm.c360_id, cx.c360_id)
+    case_id: m.case_id
+    model_name: m.model_name
+    model_version: m.model_version
+    score_ts: m.score_ts
+    score_date: m.score_date
+    score: m.score
+    score_band: m.score_band
+    recommended_action: m.recommended_action
+    top_reason_1_text: m.top_reason_1_text
+    uses_protected_attributes: m.uses_protected_attributes
+    dq_superseded_duplicate: m.dq_superseded_duplicate
+
+# ---- reference and operational tables (columns confirmed on the DB machine) ---------------------
+hardship_programs:
+  grain: one row per hardship programme version
+  description: Reference list of hardship programmes (program_id matches offers.program_id).
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.hardship_programs hp
+  columns:
+    program_id: hp.program_id
+    version: {expr: hp.version, optional: true}
+    program_name: {expr: hp.program_name, optional: true}
+    product_types: {expr: hp.product_types, optional: true}
+    policy_section: {expr: hp.policy_section, optional: true}
+    description: {expr: hp.description, optional: true}
+    min_hardship_level: {expr: hp.min_hardship_level, optional: true}
+    max_dpd: {expr: hp.max_dpd, optional: true}
+    min_months_on_book: {expr: hp.min_months_on_book, optional: true}
+    max_uses_12m: {expr: hp.max_uses_12m, optional: true}
+    excludes_insolvency: {expr: hp.excludes_insolvency, optional: true}
+    excludes_broken_plan_90d: {expr: hp.excludes_broken_plan_90d, optional: true}
+    requires_income_evidence: {expr: hp.requires_income_evidence, optional: true}
+    payment_reduction_pct: {expr: hp.payment_reduction_pct, optional: true}
+    rate_override: {expr: hp.rate_override, optional: true}
+    duration_months: {expr: hp.duration_months, optional: true}
+    term_extension_max_months: {expr: hp.term_extension_max_months, optional: true}
+    fees_waived_flag: {expr: hp.fees_waived_flag, optional: true}
+    approver_level: {expr: hp.approver_level, optional: true}
+    effective_from: {expr: hp.effective_from, optional: true}
+    effective_to: {expr: hp.effective_to, optional: true}
+
+agents:
+  grain: one row per collections agent
+  description: Collections agents - non-personal attributes only (never names).
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.agents ag
+  columns:
+    agent_id: ag.agent_id
+    site: {expr: ag.site, optional: true}
+    team_id: {expr: ag.team_id, optional: true}
+    role: {expr: ag.role, optional: true}
+    employment_type: {expr: ag.employment_type, optional: true}
+    tenure_months: {expr: ag.tenure_months, optional: true}
+    languages: {expr: ag.languages, optional: true}
+    skill_early_stage: {expr: ag.skill_early_stage, optional: true}
+    skill_mid_stage: {expr: ag.skill_mid_stage, optional: true}
+    skill_late_stage: {expr: ag.skill_late_stage, optional: true}
+    skill_hardship: {expr: ag.skill_hardship, optional: true}
+    skill_disputes: {expr: ag.skill_disputes, optional: true}
+    skill_auto_loans: {expr: ag.skill_auto_loans, optional: true}
+    vulnerable_customer_certified: {expr: ag.vulnerable_customer_certified, optional: true}
+    shift_pattern: {expr: ag.shift_pattern, optional: true}
+    status: {expr: ag.status, optional: true}
+
+case_assignment_history:
+  grain: one row per case assignment
+  description: Which agent a case was assigned to, and when.
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.case_assignment_history h
+    LEFT JOIN src.golden.case_xref cx ON cx.case_id = h.case_id
+  columns:
+    c360_id: cx.c360_id
+    assignment_id: h.assignment_id
+    case_id: h.case_id
+    agent_id: h.agent_id
+    team_id: {expr: h.team_id, optional: true}
+    queue: {expr: h.queue, optional: true}
+    assigned_ts: {expr: h.assigned_ts, optional: true}
+    unassigned_ts: {expr: h.unassigned_ts, optional: true}
+    assignment_method: {expr: h.assignment_method, optional: true}
+    continuity_flag: {expr: h.continuity_flag, optional: true}
+    language_match_flag: {expr: h.language_match_flag, optional: true}
+    certified_for_vulnerable_flag: {expr: h.certified_for_vulnerable_flag, optional: true}
+    dpd_at_assignment: {expr: h.dpd_at_assignment, optional: true}
+    overdue_at_assignment: {expr: h.overdue_at_assignment, optional: true}
+    hardship_flag_at_assignment: {expr: h.hardship_flag_at_assignment, optional: true}
+    contacts_during: {expr: h.contacts_during, optional: true}
+    rpcs_during: {expr: h.rpcs_during, optional: true}
+    ptps_during: {expr: h.ptps_during, optional: true}
+    payments_during_amount: {expr: h.payments_during_amount, optional: true}
+    complaint_during_flag: {expr: h.complaint_during_flag, optional: true}
+
+code_lookups:
+  grain: one row per code
+  description: Reference meanings of coded values (outcome codes, channels, queues and so on).
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.code_lookups cl
+  columns:
+    code_type: cl.code_type
+    code: cl.code
+    description: {expr: cl.description_en, optional: true}
+    description_fr: {expr: cl.description_fr, optional: true}
+    attributes_json: {expr: cl.attributes_json, optional: true}
+    active_flag: {expr: cl.active_flag, optional: true}
+    effective_from: {expr: cl.effective_from, optional: true}
+
+metric_definitions:
+  grain: one row per official metric definition
+  description: The bank's official metric definitions.
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.metric_definitions md
+  columns:
+    metric_id: md.metric_id
+    metric_name: md.metric_name
+    business_definition: {expr: md.business_definition, optional: true}
+    formula: {expr: md.formula, optional: true}
+    grain: {expr: md.grain, optional: true}
+    time_basis: {expr: md.time_basis, optional: true}
+    default_filters: {expr: md.default_filters, optional: true}
+    unit: {expr: md.unit, optional: true}
+    good_direction: {expr: md.good_direction, optional: true}
+    synonyms: {expr: md.synonyms, optional: true}
+    source_tables: {expr: md.source_tables, optional: true}
+    example_question: {expr: md.example_question, optional: true}
+    owner: {expr: md.owner, optional: true}
+    certified_flag: {expr: md.certified_flag, optional: true}
+
+ops_events:
+  grain: one row per operational event
+  description: Incidents, outages, releases, data-feed issues and policy changes known to the operations team (Eastern Time).
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.ops_events oe
+  columns:
+    event_id: oe.event_id
+    event_type: {expr: oe.event_type, optional: true}
+    system: {expr: oe.system, optional: true}
+    start_ts: {expr: oe.start_ts, optional: true}
+    end_ts: {expr: oe.end_ts, optional: true}
+    severity: {expr: oe.severity, optional: true}
+    description: {expr: oe.description, optional: true}
+    affected_tables: {expr: oe.affected_tables, optional: true}
+    affected_customers_est: {expr: oe.affected_customers_est, optional: true}
+    reference_doc_id: {expr: oe.reference_doc_id, optional: true}
+
+qa_checklist:
+  grain: one row per call quality checklist item
+  description: The call quality (QA) checklist agents are scored against.
+  required: false
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.curated.qa_checklist qa
+  columns:
+    item_no: qa.item_no
+    item_code: {expr: qa.item_code, optional: true}
+    item_name: {expr: qa.item_name, optional: true}
+    pass_criteria: {expr: qa.pass_criteria, optional: true}
+    fail_examples: {expr: qa.fail_examples, optional: true}
+    weight: {expr: qa.weight, optional: true}
+    critical_flag: {expr: qa.critical_flag, optional: true}
+    applies_when: {expr: qa.applies_when, optional: true}
+    evidence_required: {expr: qa.evidence_required, optional: true}
+    version: {expr: qa.version, optional: true}
+
+dq_results:
+  grain: one row per data quality check (latest Layer 1 run)
+  description: Results of Layer 1's data quality checks, latest run only.
+  required: true
+  confidence: confirmed
+  source: |
+    SELECT {cols}
+    FROM src.golden.dq_results d
+    WHERE d.run_ts = (SELECT max(run_ts) FROM src.golden.dq_results)
+  columns:
+    run_ts: d.run_ts
+    check_id: d.check_id
+    category: d.category
+    table_name: d.table_name
+    issue: d.issue
+    records_affected: d.records_affected
+    records_total: d.records_total
+    pct: d.pct
+    handling: d.handling
+    severity: d.severity

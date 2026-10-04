@@ -1,0 +1,881 @@
+# What Layer 2 expects to find in Layer 1's c360.duckdb (schemas `curated` and `golden`).
+#
+# Source: SPEC_LAYER2.md Appendix A, which was derived by reading the Layer 1 code.
+#   confirmed = referenced in Layer 1 code or the sample document, so it exists on the real machine
+#   inferred  = plausible but never seen; fix on the DB machine (DB_MACHINE_RUNBOOK.md, Step 3)
+#   protected = confirmed to exist in the source, and must never reach the serving database
+#
+# Types are coarse classes: string | int | float | bool | date | timestamp | list.
+# int and float are treated as compatible by the doctor.
+# The synthetic generator (python -m c360.layer2.synth) builds exactly these tables.
+
+curated:
+  customers:
+    confidence: confirmed
+    grain: one row per CRM record
+    confirmed:
+      crm_customer_id: string
+      first_name: string
+      middle_name: string
+      last_name: string
+      preferred_name: string
+      date_of_birth: date
+      dob_raw: string
+      age: int
+      age_band: string
+      customer_since_date: date
+      tenure_months: int
+      segment: string
+      primary_phone_raw: string
+      primary_phone_std: string
+      primary_phone_type: string
+      email: string
+      email_std: string
+      address_line1: string
+      city: string
+      province_code: string
+      province_code_std: string
+      postal_code: string
+      postal_code_raw: string
+      postal_code_std: string
+      time_zone: string
+      returned_mail_flag: bool
+      preferred_language: string
+      preferred_channel: string
+      preferred_contact_window_start: string
+      preferred_contact_window_end: string
+      permitted_call_start_local: string
+      permitted_call_end_local: string
+      employment_status: string
+      occupation_category: string
+      employer_name: string
+      pay_frequency: string
+      declared_annual_income: float
+      income_verified_flag: bool
+      income_source: string
+      housing_status: string
+      monthly_housing_cost: float
+      internal_risk_grade: string
+      customer_status: string
+      last_profile_update_ts: timestamp
+      consent_call: bool
+      consent_autodialer: bool
+      consent_sms: bool
+      consent_email: bool
+      voicemail_permitted: bool
+      contact_at_work_permitted: bool
+      internal_do_not_call_flag: bool
+      cease_communication_flag: bool
+      third_party_authorised_flag: bool
+      credit_counselling_agency_flag: bool
+      power_of_attorney_flag: bool
+      legal_representative_flag: bool
+      deceased_flag: bool
+      bankruptcy_flag: bool
+      consumer_proposal_flag: bool
+      fraud_victim_flag: bool
+      military_or_reserve_flag: bool
+      national_dncl_flag: bool
+      is_deleted: bool
+      national_id_hash: string
+      duplicate_of_crm_id: string
+      dq_province_nonstandard: bool
+      dq_shared_national_id: bool
+    protected:
+      salutation: string
+      gender_code: string
+      marital_status: string
+      citizenship_status: string
+      id_document_type: string
+      household_size: int
+      dependants_count: int
+      newcomer_program_flag: bool
+      newcomer_arrival_date: date
+      accessibility_needs_flag: bool
+      accessibility_type: string
+      vulnerability_flag: bool
+      vulnerability_type: string
+      vulnerability_source: string
+      vulnerability_recorded_date: date
+      vulnerability_review_date: date
+    inferred:
+      record_created_ts: timestamp
+      record_source: string
+
+  card_accounts:
+    confidence: confirmed
+    grain: one row per card account
+    confirmed:
+      months_on_book: int
+      available_credit: float
+      cycles_delinquent: int
+      overlimit_flag: bool
+      delinquency_start_date: date
+      times_60dpd_12m: int
+      times_90dpd_12m: int
+      card_account_id: string
+      src_customer_ref: string
+      product_code: string
+      card_tier: string
+      account_status: string
+      open_date: date
+      snapshot_date: date
+      credit_limit: float
+      current_balance: float
+      statement_balance: float
+      utilisation: float
+      minimum_payment_due: float
+      payment_due_date: date
+      past_due_amount: float
+      dpd: int
+      dpd_bucket: string
+      dpd_bucket_recomputed: string
+      worst_dpd_12m: int
+      times_30dpd_12m: int
+      last_payment_date: date
+      last_payment_amount: float
+      autopay_enrolled: bool
+      autopay_failed_count_90d: int
+      hardship_program_flag: bool
+      hardship_program_type: string
+      dispute_open_flag: bool
+      chargeoff_flag: bool
+      chargeoff_date: date
+      chargeoff_amount: float
+      cash_advance_count_90d: int
+      cardholder_phone_raw: string
+      dq_dpd_missing: bool
+      dq_bucket_mismatch: bool
+      dq_stale_snapshot: bool
+
+  loan_accounts:
+    confidence: confirmed
+    grain: one row per loan
+    confirmed:
+      times_30dpd_12m: int
+      times_60dpd_12m: int
+      times_90dpd_12m: int
+      delinquency_start_date: date
+      restructure_type: string
+      remaining_term_months: int
+      collateral_type: string
+      loan_id: string
+      src_customer_ref: string
+      co_borrower_ref: string
+      product_type: string
+      product_code: string
+      secured_flag: bool
+      origination_date: date
+      maturity_date: date
+      original_amount: float
+      interest_rate: float
+      payment_frequency: string
+      scheduled_payment_amount: float
+      next_due_date: date
+      next_due_amount: float
+      principal_balance: float
+      total_outstanding: float
+      past_due_amount: float
+      missed_payments_count: int
+      dpd: int
+      dpd_bucket: string
+      dpd_bucket_recomputed: string
+      worst_dpd_12m: int
+      last_payment_date: date
+      last_payment_amount: float
+      pad_enrolled: bool
+      pad_returned_count_90d: int
+      deferral_count_life: int
+      restructure_flag: bool
+      hardship_program_flag: bool
+      hardship_program_type: string
+      chargeoff_flag: bool
+      chargeoff_date: date
+      chargeoff_amount: float
+      repossession_flag: bool
+      snapshot_date: date
+      dq_dpd_missing: bool
+      dq_bucket_mismatch: bool
+      dq_stale_snapshot: bool
+
+  deposit_accounts:
+    confidence: confirmed
+    grain: one row per deposit account
+    confirmed:
+      product_code: string
+      joint_account_flag: bool
+      nsf_fee_mtd: float
+      deposit_account_id: string
+      src_customer_ref: string
+      joint_holder_ref: string
+      cif: string
+      joint_holder_cif: string
+      product_type: string
+      currency: string
+      account_status: string
+      open_date: date
+      current_balance: float
+      available_balance: float
+      overdraft_limit: float
+      overdraft_used: float
+      overdraft_dpd: int
+      overdraft_dpd_bucket: string
+      overdraft_dpd_bucket_recomputed: string
+      days_negative_mtd: int
+      nsf_count_mtd: int
+      payroll_deposit_flag: bool
+      payroll_frequency_detected: string
+      last_payroll_date: date
+      last_payroll_amount: float
+      expected_next_payroll_date: date
+      payroll_delay_days: int
+      payroll_avg_amount_3m: float
+      payroll_amount_change_pct: float
+      ei_deposit_flag: bool
+      cpp_oas_deposit_flag: bool
+      other_lender_payment_amount_mtd: float
+      high_cost_lender_txn_flag: bool
+      essential_spend_amount_mtd: float
+      net_cash_flow_mtd: float
+      cash_flow_volatility_6m: float
+      income_to_debt_service_ratio_est: float
+      garnishment_flag: bool
+      snapshot_date: date
+      dq_cif_leading_zeros_lost: bool
+      dq_stale_snapshot: bool
+
+  account_monthly_snapshot:
+    confidence: confirmed
+    grain: one row per account per month-end
+    confirmed:
+      account_id: string
+      crm_customer_id: string
+      month_end_date: date
+      dpd: int
+      dpd_bucket: string
+      dpd_bucket_recomputed: string
+      dq_bucket_mismatch: bool
+      product_type: string
+      account_status: string
+      balance: float
+      limit_or_original_amount: float
+      minimum_due: float
+      payment_made: float
+      overlimit_flag: bool
+      write_off_flag: bool
+      salary_credit_amount: float
+
+  collections_cases:
+    confidence: confirmed
+    grain: one row per collections case
+    confirmed:
+      province_code: string
+      test_cell: string
+      strategy_code: string
+      assignment_method: string
+      assigned_team: string
+      language_of_service: string
+      days_in_collections: int
+      entry_dpd: int
+      max_dpd_episode: int
+      cure_date: date
+      days_to_cure: int
+      promises_total: int
+      promises_kept: int
+      promises_broken: int
+      payments_since_open_amount: float
+      hardship_source: string
+      hardship_plan_type: string
+      dispute_type: string
+      dispute_status: string
+      complaint_stage: string
+      escalation_flag: bool
+      agency_placement_flag: bool
+      legal_status: string
+      chargeoff_date: date
+      chargeoff_amount: float
+      settlement_amount: float
+      contact_cap_7d: int
+      contacts_last_7d: int
+      contact_cap_breach_count: int
+      out_of_hours_contact_count: int
+      recidivism_flag: bool
+      prior_cases_12m: int
+      case_id: string
+      coll_customer_ref: string
+      account_ids: list
+      primary_account_id: string
+      primary_product: string
+      case_open_date: date
+      case_open_reason: string
+      case_status: string
+      current_dpd: int
+      current_bucket: string
+      current_bucket_recomputed: string
+      total_overdue: float
+      total_exposure: float
+      queue: string
+      assigned_agent_id: string
+      current_treatment: string
+      next_scheduled_action: string
+      contact_attempts_total: int
+      rpc_count: int
+      last_contact_ts: timestamp
+      last_rpc_ts: timestamp
+      hardship_flag: bool
+      hardship_reason: string
+      hardship_program_offered: bool
+      hardship_program_accepted: bool
+      payment_plan_flag: bool
+      plan_instalment_amount: float
+      settlement_offered_flag: bool
+      dispute_flag: bool
+      complaint_flag: bool
+      cease_contact_flag: bool
+      third_party_rep_flag: bool
+      insolvency_hold_flag: bool
+      deceased_hold_flag: bool
+      legal_referral_flag: bool
+      chargeoff_flag: bool
+      nba_recommendation_last: string
+      outcome: string
+      outcome_date: date
+      cure_flag: bool
+      is_open: bool
+      dq_bucket_mismatch: bool
+
+  promises_to_pay:
+    confidence: confirmed
+    grain: one row per promise to pay
+    confirmed:
+      account_id: string
+      agent_id: string
+      contact_id: string
+      product: string
+      ptp_type: string
+      ptp_sequence_in_case: int
+      prior_broken_ptp_count: int
+      overdue_at_creation: float
+      dpd_at_creation: int
+      grace_days: int
+      paid_date: date
+      broken_reason_agent_coded: string
+      ptp_id: string
+      case_id: string
+      crm_customer_id: string
+      ptp_amount: float
+      ptp_due_date: date
+      ptp_status: string
+      ptp_created_ts: timestamp
+      ptp_channel: string
+      amount_paid_against: float
+
+  offers:
+    confidence: confirmed
+    grain: one row per hardship/payment-plan offer
+    confirmed:
+      account_id: string
+      agent_id: string
+      contact_id: string
+      nba_recommended_flag: bool
+      eligibility_result: string
+      decline_reason: string
+      response_ts: timestamp
+      plan_start_date: date
+      plan_payments_due: int
+      plan_payments_made: int
+      offer_id: string
+      case_id: string
+      program_id: string
+      offer_ts: timestamp
+      offered_by: string
+      proposed_payment_amount: float
+      duration_months: int
+      customer_response: string
+      plan_status: string
+
+  contact_history:
+    confidence: confirmed
+    grain: one row per contact attempt or inbound contact
+    confirmed:
+      source_platform: string
+      sub_channel: string
+      strategy_code: string
+      test_cell: string
+      attempt_number_case: int
+      within_permitted_hours_flag: bool
+      stat_holiday_flag: bool
+      day_of_week: string
+      consent_status_at_time: string
+      dial_result: string
+      abandoned_flag: bool
+      identity_verified_flag: bool
+      ptp_made_flag: bool
+      payment_method: string
+      callback_requested_flag: bool
+      transferred_flag: bool
+      transcript_id: string
+      note_id: string
+      inbound_reason: string
+      contact_cost_cad: float
+      system_event_type: string
+      ops_incident_id: string
+      dpd_at_contact: int
+      bucket_at_contact: string
+      agent_site: string
+      contact_id: string
+      case_id: string
+      account_id: string
+      crm_customer_id: string
+      contact_ts_utc: timestamp
+      contact_ts_local: timestamp
+      contact_hour_local: int
+      channel: string
+      channel_v2: string
+      channel_std: string
+      direction: string
+      outcome_code: string
+      agent_id: string
+      talk_duration_sec: int
+      sms_template_id: string
+      letter_template_id: string
+      email_template_id: string
+      payment_amount: float
+      payment_taken_flag: bool
+      ptp_id: string
+      rpc_flag: bool
+      hardship_mentioned_flag: bool
+      dispute_raised_flag: bool
+      complaint_raised_flag: bool
+      cease_request_flag: bool
+      dq_duplicate_of: string
+      dq_channel_renamed: bool
+
+  agent_notes:
+    confidence: confirmed
+    grain: one row per agent note
+    confirmed:
+      contact_id: string
+      account_id: string
+      note_source: string
+      note_id: string
+      note_ts: timestamp
+      note_type: string
+      agent_id: string
+      case_id: string
+      crm_customer_id: string
+      note_text: string
+
+  call_transcripts:
+    confidence: confirmed
+    grain: one row per call transcript (text lives in a JSON file under the dataset root)
+    confirmed:
+      agent_id: string
+      call_end_ts: timestamp
+      transcript_id: string
+      contact_id: string
+      case_id: string
+      call_start_ts: timestamp
+      duration_sec: int
+      direction: string
+      language: string
+      voice_sample_id: string
+      file_path: string
+
+  external:
+    confidence: confirmed
+    grain: one row per bureau subject (latest bureau pull)
+    confirmed:
+      bank_subject_ref: string
+      cif: string
+      pull_date: date
+      hit_status: string
+      risk_score: int
+      risk_score_prev_3m: int
+      risk_score_delta_90d: int
+      bankruptcy_score: int
+      inquiries_hard_6m: int
+      inquiries_hard_3m: int
+      inquiries_hard_3m_std: int
+      revolving_utilisation: float
+      total_monthly_obligations: float
+      total_balance_all_trades: float
+      off_us_revolving_balance: float
+      off_us_delinquent_trades: int
+      collection_items_count: int
+      high_cost_lender_trades_count: int
+      bnpl_trades_count: int
+      new_trades_6m: int
+      bankruptcy_on_file_flag: bool
+      consumer_proposal_on_file_flag: bool
+      deceased_indicator: bool
+      fraud_alert_flag: bool
+      address_mismatch_flag: bool
+      subject_name_reported: string
+      dq_shifted_row: bool
+
+  bureau_history:
+    confidence: confirmed
+    grain: one row per bureau subject per pull
+    confirmed:
+      hit_status: string
+      revolving_utilisation: float
+      delinquent_trades_count: int
+      inquiries_hard_6m: int
+      stale_score_flag: bool
+      bank_subject_ref: string
+      cif: string
+      pull_date: date
+      risk_score: int
+
+  salary_credit_history:
+    confidence: confirmed
+    grain: one row per deposit account per month
+    confirmed:
+      account_type: string
+      employer_flag: string
+      first_credit_date: date
+      deposit_account_id: string
+      crm_customer_id: string
+      credit_month: string
+      credit_amount_total: float
+      gap_flag: bool
+      last_credit_date: date
+
+  model_scores:
+    confidence: confirmed
+    grain: one row per model score
+    confirmed:
+      entity_type: string
+      slot_label: string
+      risk_grade: int
+      predicted_value: float
+      score_id: string
+      entity_id: string
+      crm_customer_id: string
+      case_id: string
+      model_name: string
+      model_version: string
+      score_ts: timestamp
+      score_date: date
+      score: float
+      score_band: string
+      recommended_action: string
+      top_reason_1_text: string
+      uses_protected_attributes: bool
+      dq_superseded_duplicate: bool
+
+  transactions:
+    confidence: confirmed
+    grain: one row per transaction (not copied to Layer 2 in this build)
+    confirmed:
+      account_id: string
+      txn_ts: timestamp
+      amount: float
+      direction: string
+      raw_description: string
+      dq_possible_duplicate: bool
+
+  # ---- reference / operational tables: they exist, but their columns were never seen ----------
+  metric_definitions:
+    confidence: confirmed
+    grain: one row per official metric definition (15 rows expected)
+    confirmed:
+      metric_id: string
+      metric_name: string
+      business_definition: string
+      formula: string
+      grain: string
+      time_basis: string
+      default_filters: string
+      unit: string
+      good_direction: string
+      synonyms: list
+      source_tables: list
+      example_question: string
+      owner: string
+      certified_flag: bool
+
+  benchmark_questions:
+    confidence: inferred
+    grain: one row per benchmark question (35 rows expected)
+    inferred:
+      question_id: string
+      question: string
+      expected_answer: string
+      gold_sql: string
+      category: string
+
+  code_lookups:
+    confidence: confirmed
+    grain: one row per code (113 rows expected)
+    confirmed:
+      code_type: string
+      code: string
+      description_en: string
+      description_fr: string
+      attributes_json: string
+      active_flag: bool
+      effective_from: date
+
+  hardship_programs:
+    confidence: confirmed
+    grain: one row per hardship programme (18 rows expected)
+    confirmed:
+      program_id: string
+      version: string
+      program_name: string
+      product_types: list
+      policy_section: string
+      description: string
+      min_hardship_level: string
+      max_dpd: int
+      min_months_on_book: int
+      max_uses_12m: int
+      excludes_insolvency: bool
+      excludes_broken_plan_90d: bool
+      requires_income_evidence: bool
+      payment_reduction_pct: float
+      rate_override: float
+      duration_months: int
+      term_extension_max_months: int
+      fees_waived_flag: bool
+      approver_level: string
+      effective_from: date
+      effective_to: date
+
+  agents:
+    confidence: confirmed
+    grain: one row per agent (1,000 rows expected)
+    confirmed:
+      agent_id: string
+      site: string
+      team_id: string
+      role: string
+      employment_type: string
+      tenure_months: int
+      languages: list
+      skill_early_stage: int
+      skill_mid_stage: int
+      skill_late_stage: int
+      skill_hardship: int
+      skill_disputes: int
+      skill_auto_loans: int
+      vulnerable_customer_certified: bool
+      shift_pattern: string
+      status: string
+
+  case_assignment_history:
+    confidence: confirmed
+    grain: one row per case assignment
+    confirmed:
+      assignment_id: string
+      case_id: string
+      agent_id: string
+      team_id: string
+      queue: string
+      assigned_ts: timestamp
+      unassigned_ts: timestamp
+      assignment_method: string
+      continuity_flag: bool
+      language_match_flag: bool
+      certified_for_vulnerable_flag: bool
+      dpd_at_assignment: int
+      overdue_at_assignment: float
+      hardship_flag_at_assignment: bool
+      contacts_during: int
+      rpcs_during: int
+      ptps_during: int
+      payments_during_amount: float
+      complaint_during_flag: bool
+
+  reference_documents:
+    confidence: inferred
+    grain: reference (19 rows expected); columns unknown
+    inferred:
+      document_id: string
+      title: string
+
+  qa_checklist:
+    confidence: confirmed
+    grain: one row per call quality checklist item (10 rows expected)
+    confirmed:
+      item_no: int
+      item_code: string
+      item_name: string
+      pass_criteria: string
+      fail_examples: string
+      weight: int
+      critical_flag: bool
+      applies_when: string
+      evidence_required: bool
+      version: string
+
+  agent_shifts:
+    confidence: inferred
+    grain: operational; columns unknown
+    inferred:
+      agent_id: string
+      shift_date: date
+
+  channel_capacity:
+    confidence: inferred
+    grain: operational; columns unknown
+    inferred:
+      channel: string
+      capacity_date: date
+
+  ops_events:
+    confidence: confirmed
+    grain: one row per operational event known to the operations team (6 rows expected)
+    confirmed:
+      event_id: string
+      event_type: string
+      system: string
+      start_ts: timestamp
+      end_ts: timestamp
+      severity: string
+      description: string
+      affected_tables: list
+      affected_customers_est: int
+      reference_doc_id: string
+
+  geo_reference:
+    confidence: inferred
+    grain: reference; columns unknown
+    inferred:
+      province_code: string
+      province_name: string
+
+  _column_docs:
+    confidence: confirmed
+    grain: one row per source column, with the official description from schema.json
+    confirmed:
+      table_name: string
+      column_name: string
+      type: string
+      description: string
+
+  _cast_failures:
+    confidence: confirmed
+    grain: one row per column whose raw values failed to convert
+    confirmed:
+      table_name: string
+      column_name: string
+      declared_type: string
+      rows_non_null: int
+      cast_failures: int
+      non_iso_values: int
+      sample_bad: string
+
+golden:
+  crm_person_map:
+    confidence: confirmed
+    grain: one row per CRM record
+    confirmed:
+      crm_customer_id: string
+      c360_id: string
+      master_crm_id: string
+      is_master: bool
+      group_size: int
+      match_confidence: float
+      link_method: string
+
+  source_customer_xref:
+    confidence: confirmed
+    grain: one row per source-system customer key
+    confirmed:
+      src_system: string
+      src_ref: string
+      c360_id: string
+      link_status: string
+      match_confidence: float
+      model_confidence: float
+      match_confidence_pii_only: float
+      matched_crm_id: string
+      evidence: string
+      bridge_conflict: bool
+      runner_up_c360_id: string
+      runner_up_confidence: float
+      top_candidates: list
+      llm_match_pct: float
+      llm_reason: string
+      reviewer: string
+      review_note: string
+
+  account_xref:
+    confidence: confirmed
+    grain: one row per account per role
+    confirmed:
+      account_id: string
+      product_family: string
+      product: string
+      src_system: string
+      src_ref: string
+      role: string
+      c360_id: string
+      link_status: string
+      match_confidence: float
+
+  case_xref:
+    confidence: confirmed
+    grain: one row per collections case
+    confirmed:
+      case_id: string
+      coll_customer_ref: string
+      c360_id: string
+      link_method: string
+      match_confidence: float
+      account_owner_c360_id: string
+
+  contact_orphan_xref:
+    confidence: confirmed
+    grain: one row per contact whose case is unknown
+    confirmed:
+      contact_id: string
+      case_id: string
+      crm_customer_id: string
+      c360_id: string
+      link_method: string
+
+  _g_contact_person:
+    confidence: confirmed
+    grain: one row per contact
+    confirmed:
+      contact_id: string
+      c360_id: string
+
+  _g_case_person:
+    confidence: confirmed
+    grain: one row per linked case
+    confirmed:
+      case_id: string
+      c360_id: string
+      link_method: string
+      match_confidence: float
+
+  match_review_queue:
+    confidence: confirmed
+    grain: one row per identity link awaiting review
+    confirmed:
+      src_system: string
+      src_ref: string
+      link_status: string
+      review_reason: string
+      model_confidence: float
+      proposed_c360_id: string
+
+  dq_results:
+    confidence: confirmed
+    grain: one row per data quality check per run
+    confirmed:
+      run_ts: timestamp
+      check_id: string
+      category: string
+      table_name: string
+      issue: string
+      records_affected: int
+      records_total: int
+      pct: float
+      handling: string
+      severity: string

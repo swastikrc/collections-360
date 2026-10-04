@@ -1,0 +1,34 @@
+# Rewordings of synthetic questions. `of` names the synthetic question whose expected answer (and
+# fake plan) each one inherits. A group passes only if every rewording passes.
+
+- {id: P01a, of: S01, question: "Of the promises that fell due in August 2026, what percentage did customers keep in full?"}
+- {id: P01b, of: S01, question: "Aug 2026 PTP kept rate?"}
+- {id: P01c, of: S01, question: "How good were customers at keeping their payment promises that came due in August 2026?"}
+
+- {id: P02a, of: S02, question: "Break the kept-promise rate down by reason for hardship, for promises due over the past 90 days."}
+- {id: P02b, of: S02, question: "For the last 90 days, how does the share of kept promises vary with the customer's hardship reason?"}
+
+- {id: P06a, of: S06, question: "Of the cases open at the start of August 2026, what share cured during the month?"}
+- {id: P06b, of: S06, question: "Cure rate, August 2026?"}
+
+- {id: P08a, of: S08, question: "In June 2026, what proportion of accounts that were 1-30 days past due at month-end had moved to a worse bucket by the next month-end?"}
+- {id: P08b, of: S08, question: "How many of the 1-30 bucket accounts rolled forward in June 2026, as a rate?"}
+
+- {id: P11a, of: S11, question: "Over the past 30 days, how often did an outbound attempt actually reach the customer (right party)?"}
+- {id: P11b, of: S11, question: "RPC rate for the last 30 days"}
+- {id: P11c, of: S11, question: "What fraction of our outbound contact attempts in the last 30 days were right-party contacts?"}
+
+- {id: P13a, of: S13, question: "Count the outbound contact attempts we made in the past week."}
+- {id: P13b, of: S13, question: "How busy was outbound over the last 7 days, in number of attempts?"}
+
+- {id: P17a, of: S17, question: "So far this year, what share of hardship offers were accepted by customers?"}
+- {id: P17b, of: S17, question: "YTD acceptance rate on hardship and payment-plan offers?"}
+
+- {id: P19a, of: S19, question: "What is the current number of open cases in collections?"}
+- {id: P19b, of: S19, question: "How big is the open collections caseload today?"}
+
+- {id: P21a, of: S21, question: "Add up the overdue amount across all cases that are still open."}
+- {id: P21b, of: S21, question: "How much is past due in total on our open collections cases?"}
+
+- {id: P27a, of: S27, question: "What is the number of customers showing a financial hardship flag?"}
+- {id: P27b, of: S27, question: "Count the people the Collections 360 marks as being in financial hardship."}

@@ -1,0 +1,46 @@
+To run layer 1:
+python run_layer1.py                 # full build (~10 min on one 22-core laptop)
+python run_layer1.py --from identity # resume from a step
+
+
+To run layer 2:
+
+# --- one-time setup ---
+python -m venv .venv && source .venv/bin/activate    # Python 3.11+ (a .venv already exists on the dev machine)
+pip install -r requirements-layer2.txt
+
+# --- environment: synthetic data (dev machine, no real data needed) ---
+export C360_WAREHOUSE=$PWD/warehouse_synth
+export MAPLE_DATA=$PWD/warehouse_synth/maple_data
+export C360_L2_MONGO=mock:$PWD/warehouse_synth/customers.jsonl
+python -m c360.layer2.synth                  # generate the synthetic world (~4 s)
+
+# --- environment: real data (DB machine; follow docs/DB_MACHINE_RUNBOOK.md) ---
+unset C360_WAREHOUSE C360_L2_MONGO           # use ./warehouse and the real MongoDB
+export MAPLE_DATA=$PWD/maple_data/maple_collections_release
+
+# --- build and check the serving database ---
+python -m c360.layer2.doctor                 # compare the source with what Layer 2 expects -> outputs/layer2/doctor_report.md
+python run_layer1.py --only publish_l2       # build the serving database (refuses to publish if the doctor finds an error)
+
+# --- Gemini (needed for ask, live tests and live eval) ---
+export GEMINI_API_KEY=...                    # never print or commit it
+python -m c360.layer2.llm.gemini             # list the models this key can use
+export C360_L2_MODEL=<model name>            # pick the strongest Pro-tier model; record it in CHANGELOG_LAYER2.md
+
+# --- ask questions ---
+python -m c360.layer2.ask "Which hardship reason has the best promise-kept rate in the last 90 days?"
+python -m c360.layer2.ask --trace "How many open cases are in each queue?"   # also show each tool call and validator message
+python -m c360.layer2.ask --json "What is the cure rate year to date?"       # print the answer as JSON
+python -m c360.layer2.ask --repl                                             # interactive, keeps follow-up context
+
+# --- tests ---
+pytest tests/layer2 -q                       # offline suite (live tests are skipped without a key)
+pytest tests/layer2 -q -m "not live"         # offline only
+pytest tests/layer2 -q -m live               # 5 live smoke tests, one per route (needs the key and model)
+
+# --- evaluation (reports go to outputs/layer2/eval_<set>_<timestamp>.md) ---
+python -m c360.layer2.eval --set all --fake  # offline pipeline check with a scripted fake LLM (no key needed)
+python -m c360.layer2.eval --set all         # live: synthetic, heldout, paraphrase, refusal, benchmark
+python -m c360.layer2.eval --set benchmark   # one set; also: synthetic | heldout | paraphrase | refusal | heldout_real
+python -m c360.layer2.eval --set benchmark --limit 5 --delay 2   # first 5 questions, 2 s between them (rate limits)

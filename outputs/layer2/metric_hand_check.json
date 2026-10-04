@@ -1,0 +1,146 @@
+[
+ {
+  "metric": "promise_kept_rate",
+  "period": "Q2 2026",
+  "compute_metric": 0.5269267107571872,
+  "hand_sql": 0.5269267107571872,
+  "agree": true,
+  "groups": 7
+ },
+ {
+  "metric": "broken_promise_rate",
+  "period": "Q2 2026",
+  "compute_metric": 0.43883565033517796,
+  "hand_sql": 0.43883565033517796,
+  "agree": true,
+  "groups": 6
+ },
+ {
+  "metric": "cure_rate",
+  "period": "August 2026",
+  "compute_metric": 0.20475174144522362,
+  "hand_sql": 0.20475174144522362,
+  "agree": true,
+  "groups": 6
+ },
+ {
+  "metric": "roll_rate",
+  "period": "Q2 2026",
+  "compute_metric": 0.05525477512399255,
+  "hand_sql": 0.05525477512399255,
+  "agree": true,
+  "groups": 8
+ },
+ {
+  "metric": "rpc_rate",
+  "period": "August 2026",
+  "compute_metric": 0.4382160392798691,
+  "hand_sql": 0.4382160392798691,
+  "agree": true,
+  "groups": 16
+ },
+ {
+  "metric": "ptp_rate",
+  "period": "August 2026",
+  "compute_metric": 0.3153214113098115,
+  "hand_sql": 0.3153214113098115,
+  "agree": true,
+  "groups": 2
+ },
+ {
+  "metric": "cost_per_contact",
+  "period": "August 2026",
+  "compute_metric": 1.0557833454024836,
+  "hand_sql": 1.0557833454024836,
+  "agree": true,
+  "groups": 7
+ },
+ {
+  "metric": "cost_per_rpc",
+  "period": "August 2026",
+  "compute_metric": 3.9864477939656076,
+  "hand_sql": 3.9864477939656067,
+  "agree": true,
+  "groups": 7
+ },
+ {
+  "metric": "collected_amount",
+  "period": "August 2026",
+  "compute_metric": 2816641.8599999985,
+  "hand_sql": 2816641.8599999924,
+  "agree": true,
+  "groups": 6
+ },
+ {
+  "metric": "hardship_rate",
+  "period": "year to date",
+  "compute_metric": 0.22057372935618405,
+  "hand_sql": 0.22057372935618405,
+  "agree": true,
+  "groups": 6
+ },
+ {
+  "metric": "delinquency_rate",
+  "period": "(snapshot)",
+  "compute_metric": 0.11596630177067044,
+  "hand_sql": 0.11596630177067044,
+  "agree": true,
+  "groups": 12
+ },
+ {
+  "metric": "write_off_rate",
+  "period": "last 12 months",
+  "compute_metric": 0.0007900422733677783,
+  "hand_sql": 0.0007900422733677783,
+  "agree": true,
+  "groups": 12
+ },
+ {
+  "metric": "write_off_count",
+  "period": "last 12 months",
+  "compute_metric": 841.0,
+  "hand_sql": 841.0,
+  "agree": true,
+  "groups": 12
+ },
+ {
+  "metric": "write_off_amount",
+  "period": "last 12 months",
+  "compute_metric": 11141439.459999995,
+  "hand_sql": 11141439.459999997,
+  "agree": true,
+  "groups": 12
+ },
+ {
+  "metric": "average_dpd",
+  "period": "(snapshot)",
+  "compute_metric": 56.14782291666667,
+  "hand_sql": 56.14782291666667,
+  "agree": true,
+  "groups": 5
+ },
+ {
+  "metric": "contact_attempts_per_case",
+  "period": "August 2026",
+  "compute_metric": 3.63402167846547,
+  "hand_sql": 3.63402167846547,
+  "agree": true,
+  "groups": 8
+ },
+ {
+  "metric": "contact_attempts",
+  "period": "August 2026",
+  "compute_metric": 247426.0,
+  "hand_sql": 247426.0,
+  "agree": true,
+  "groups": 5
+ },
+ {
+  "metric": "payroll_delay_share",
+  "period": "(snapshot)",
+  "compute_metric": 0.08196406223972459,
+  "hand_sql": 0.08196406223972459,
+  "agree": true,
+  "groups": 2
+ }
+]

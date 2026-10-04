@@ -1,0 +1,809 @@
+# The semantic layer: what the Layer 2 agent is told about the serving database (schema `l2`).
+# Everything here goes into the system prompt, so keep descriptions short and precise.
+#
+# Built on synthetic data. On the DB machine: take column descriptions from curated._column_docs,
+# value lists from SELECT DISTINCT, and business terms from curated.metric_definitions
+# (DB_MACHINE_RUNBOOK.md, Step 5). Items marked "placeholder" are guesses.
+
+snapshot_date: "2026-09-28"       # informational; the runtime reads meta.build in the serving DB
+
+periods:
+  # "last 90 days" = the 90 days ending on the snapshot date, snapshot day included (1 Jul - 28 Sep 2026).
+  # Set to `exclusive` if the official definitions count back from the snapshot date instead
+  # (30 Jun - 28 Sep 2026, as Layer 1's golden.py does for its 30/90-day counters).
+  last_n_days: inclusive
+
+tables:
+  customers:
+    grain: one row per person
+    key: c360_id
+    row_level: true
+    description: Non-identifying customer attributes, consent and servicing flags.
+    columns:
+      c360_id: Person id (C360-...). Join key to every person-linked table.
+      segment: 'Customer segment: affluent | emerging_affluent | mass | private_hnw.'
+      tenure_months: Months as a customer.
+      customer_since_date: Date the person first became a customer.
+      province_code: Two-letter province code (regional reporting only, never a decision input).
+      customer_status: 'CRM status: active | closed | closed_by_bank | deceased | written_off.'
+      employment_status: employed_hourly | employed_salaried | other | retired | self_employed | student | unemployed.
+      occupation_category: Occupation group.
+      pay_frequency: biweekly | irregular | monthly | semi_monthly | weekly.
+      declared_annual_income: Declared yearly income (CAD).
+      income_verified_flag: True if income was verified.
+      income_source: ei_benefits | employment | other | pension_cpp_oas | self_employment | social_assistance.
+      housing_status: own_free | own_mortgage | rent | with_family.
+      monthly_housing_cost: Monthly rent or mortgage payment.
+      internal_risk_grade: Bank's internal risk grade (1 best to 9 worst).
+      preferred_language: AR | EN | ES | FR | PA | TL | ZH (servicing preference; never a decision input).
+      preferred_channel: Preferred contact channel.
+      consent_call: Consent to be called (strictest value across the person's records).
+      consent_autodialer: Consent to autodialer calls.
+      consent_sms: Consent to SMS.
+      consent_email: Consent to email.
+      voicemail_permitted: Voicemail may be left.
+      contact_at_work_permitted: May be contacted at work.
+      internal_do_not_call: On the bank's do-not-call list.
+      cease_communication: Customer asked for contact to stop.
+      third_party_authorised: A third party is authorised to speak for the customer.
+      credit_counselling_agency: Represented by a credit counselling agency.
+      power_of_attorney: Power of attorney on file.
+      legal_representative: Legal representative on file.
+      deceased: Customer is deceased.
+      bankruptcy: Bankruptcy on file.
+      consumer_proposal: Consumer proposal on file.
+      fraud_victim: Flagged as a fraud victim.
+      military_or_reserve: Military or reserve member.
+      national_dncl_telemarketing_only: On the national do-not-call list (telemarketing only).
+      all_crm_records_deleted: Every CRM record of this person is soft-deleted.
+      crm_record_count: Number of CRM records merged into this person.
+
+  customer_summary:
+    grain: one row per person
+    key: c360_id
+    row_level: true
+    description: Person-level roll-up from the Collections 360 record - hardship, exposure, open cases, link quality.
+    columns:
+      c360_id: Person id.
+      financial_hardship_flag: True if any structured hardship signal is present (rule-based).
+      hardship_reasons: Plain-English reasons for the hardship flag, separated by "; ".
+      max_dpd: Highest days past due across the person's accounts.
+      worst_bucket: 'Delinquency bucket of max_dpd: 1-30 | 121-150 | 151-180 | 180+ | 31-60 | 61-90 | 91-120 | current.'
+      past_due_total: Total past-due amount across cards and loans.
+      card_balance_total: Total card balance.
+      loan_outstanding_total: Total loan balance outstanding.
+      delinquent_accounts: Number of accounts with dpd >= 1.
+      product_count: Number of accounts held.
+      open_cases: Number of open collections cases.
+      min_link_confidence: Lowest identity-match confidence among the person's source keys (0-1).
+      links_pending_review: Identity links awaiting human review.
+
+  card_accounts:
+    grain: one row per card account
+    key: card_account_id
+    row_level: true
+    description: Credit card accounts, current snapshot.
+    columns:
+      card_account_id: Card account id (C-...).
+      c360_id: Owner (primary cardholder).
+      product_code: Card product.
+      card_tier: classic | infinite | secured | world_elite.
+      account_status: active | blocked | charged_off | closed. Closed and charged-off accounts only appear as older snapshot rows (dq_stale_snapshot = true).
+      open_date: Date opened.
+      snapshot_date: Date this row was extracted (older than the snapshot date when dq_stale_snapshot).
+      credit_limit: Credit limit.
+      current_balance: Current balance.
+      statement_balance: Last statement balance.
+      utilisation: Balance / limit.
+      minimum_payment_due: Minimum payment due.
+      payment_due_date: Payment due date.
+      past_due_amount: Amount past due.
+      dpd: Days past due (null in about 8% of rows).
+      dpd_bucket: 'STORED delinquency bucket (use this for reported figures): 1-30 | 121-150 | 151-180 | 180+ | 31-60 | 61-90 | 91-120 | current.'
+      dpd_bucket_recomputed: Bucket recomputed from dpd. Data-quality questions only.
+      worst_dpd_12m: Worst days past due in 12 months.
+      times_30dpd_12m: Times 30+ days past due in 12 months.
+      last_payment_date: Last payment date.
+      last_payment_amount: Last payment amount.
+      autopay_enrolled: Autopay is on.
+      autopay_failed_count_90d: Failed autopay attempts in 90 days.
+      hardship_program_flag: Account is on a hardship programme.
+      hardship_program_type: debt_management_plan | fixed_payment_plan | reduced_min_payment | reduced_rate | skip_payment.
+      dispute_open_flag: A dispute is open.
+      chargeoff_flag: Charged off.
+      chargeoff_date: Charge-off date.
+      chargeoff_amount: Charge-off amount.
+      cash_advance_count_90d: Cash advances in 90 days.
+      dq_dpd_missing: dpd is missing.
+      dq_bucket_mismatch: Stored bucket disagrees with dpd.
+      dq_stale_snapshot: Row is an old snapshot.
+      months_on_book: Months since open
+      available_credit: Limit minus balance (can be negative)
+      cycles_delinquent: Number of billing cycles delinquent (NOT days)
+      overlimit_flag: Balance > limit
+      delinquency_start_date: Date account first went past due in current episode
+      times_60dpd_12m: Times 60+ DPD in 12 months
+      times_90dpd_12m: Times 90+ DPD in 12 months
+
+  loan_accounts:
+    grain: one row per loan
+    key: loan_id
+    row_level: true
+    description: Loan accounts, current snapshot.
+    columns:
+      loan_id: Loan id (L-...).
+      c360_id: Primary borrower.
+      has_co_borrower: True if the loan has a co-borrower.
+      product_type: 'auto_loan | mortgage | personal_loan | student_loc | unsecured_loc. Secured: auto_loan, mortgage (secured_flag = true); unsecured: personal_loan, unsecured_loc, student_loc.'
+      product_code: Loan product code.
+      secured_flag: True if secured (unsecured loan = secured_flag is false).
+      origination_date: Date originated.
+      maturity_date: Maturity date.
+      original_amount: Original amount.
+      interest_rate: Interest rate (0.059 = 5.9%).
+      payment_frequency: biweekly | monthly | semi_monthly | weekly.
+      scheduled_payment_amount: Scheduled payment.
+      next_due_date: Next due date.
+      next_due_amount: Next amount due.
+      principal_balance: Principal balance.
+      total_outstanding: Total outstanding.
+      past_due_amount: Amount past due.
+      missed_payments_count: Missed payments.
+      dpd: Days past due (null in about 8% of rows).
+      dpd_bucket: STORED delinquency bucket (use this for reported figures). Same values as cards.
+      dpd_bucket_recomputed: Bucket recomputed from dpd. Data-quality questions only.
+      worst_dpd_12m: Worst days past due in 12 months.
+      last_payment_date: Last payment date.
+      last_payment_amount: Last payment amount.
+      pad_enrolled: Pre-authorised debit is on.
+      pad_returned_count_90d: Returned pre-authorised debits in 90 days.
+      deferral_count_life: Payment deferrals over the life of the loan.
+      restructure_flag: Loan was restructured.
+      hardship_program_flag: Loan is on a hardship programme.
+      hardship_program_type: debt_management_plan | reduced_payment_3m | skip_payment | term_extension.
+      chargeoff_flag: Charged off.
+      chargeoff_date: Charge-off date.
+      chargeoff_amount: Charge-off amount.
+      repossession_flag: Collateral repossessed.
+      snapshot_date: Date this row was extracted.
+      dq_dpd_missing: dpd is missing.
+      dq_bucket_mismatch: Stored bucket disagrees with dpd.
+      dq_stale_snapshot: Row is an old snapshot.
+      times_30dpd_12m: Times 30+ days past due in the last 12 months
+      times_60dpd_12m: Times 60+ days past due in the last 12 months
+      times_90dpd_12m: Times 90+ days past due in the last 12 months
+      delinquency_start_date: Start of current delinquency
+      restructure_type: term_extension / rate_reduction / payment_reduction / interest_only_period
+      remaining_term_months: Remaining term
+      collateral_type: none / vehicle / cash
+
+  deposit_accounts:
+    grain: one row per deposit account
+    key: deposit_account_id
+    row_level: true
+    description: Deposit accounts with overdraft and payroll signals, current snapshot.
+    columns:
+      deposit_account_id: Deposit account id (CHQ-/SAV-/TFS-/USD-...).
+      c360_id: Primary holder.
+      has_joint_holder: True if the account has a joint holder.
+      product_type: chequing | savings | tfsa_savings | usd_account.
+      currency: CAD | USD.
+      account_status: Account status.
+      open_date: Date opened.
+      current_balance: Current balance (can be negative).
+      available_balance: Available balance.
+      overdraft_limit: Overdraft limit.
+      overdraft_used: Overdraft in use.
+      overdraft_dpd: Days the overdraft is past due.
+      overdraft_dpd_bucket: STORED overdraft delinquency bucket.
+      overdraft_dpd_bucket_recomputed: Bucket recomputed from overdraft_dpd. Data-quality questions only.
+      days_negative_mtd: Days with a negative balance this month.
+      nsf_count_mtd: Non-sufficient-funds events this month.
+      payroll_deposit_flag: Payroll is deposited to this account.
+      payroll_frequency_detected: Detected pay frequency.
+      last_payroll_date: Last payroll deposit date.
+      last_payroll_amount: Last payroll deposit amount.
+      expected_next_payroll_date: Expected next payroll date.
+      payroll_delay_days: Days the payroll deposit is late.
+      payroll_avg_amount_3m: Average payroll amount over 3 months.
+      payroll_amount_change_pct: Change in payroll versus the 3-month average (-0.2 = down 20%).
+      ei_deposit_flag: Employment Insurance deposits seen.
+      cpp_oas_deposit_flag: CPP/OAS pension deposits seen.
+      other_lender_payment_amount_mtd: Payments to other lenders this month.
+      high_cost_lender_txn_flag: Transactions with a high-cost lender seen.
+      essential_spend_amount_mtd: Essential spending this month.
+      net_cash_flow_mtd: Net cash flow this month.
+      cash_flow_volatility_6m: Cash-flow volatility over 6 months.
+      income_to_debt_service_ratio_est: Estimated income to debt-service ratio.
+      garnishment_flag: Wage garnishment on the account.
+      snapshot_date: Date this row was extracted.
+      dq_cif_leading_zeros_lost: Source customer key had lost its leading zeros (repaired).
+      dq_stale_snapshot: Row is an old snapshot.
+      product_code: Product
+      joint_account_flag: Joint account
+      nsf_fee_mtd: "NSF fees MTD (Canadian banks: ~$48\u2013$50)"
+
+  account_monthly_snapshot:
+    grain: one row per account per snapshot date
+    key: account_id + month_end_date
+    row_level: true
+    description: Quarter-end history of every account (cards, loans, mortgages, lines of credit, deposits) - 11 quarter-ends from 2023-12-31 to 2026-06-30, plus rows for charged-off accounts after write-off. There are no snapshots for other months. Basis of roll rates.
+    columns:
+      account_id: Account id (C-... card, L-... loan / mortgage / line of credit, CHQ-/SAV-/TFS-/USD-... deposit).
+      c360_id: Account owner.
+      month_end_date: Quarter-end date of the snapshot (Mar 31, Jun 30, Sep 30, Dec 31).
+      dpd: Days past due at month-end (null in about 8% of rows).
+      dpd_bucket: STORED bucket at month-end (use this for roll rates).
+      dpd_bucket_recomputed: Bucket recomputed from dpd. Data-quality questions only.
+      dq_bucket_mismatch: Stored bucket disagrees with dpd.
+      product_type: 'Product line: auto_loan | card | chequing | mortgage | personal_loan | savings | student_loc | tfsa_savings | unsecured_loc | usd_account.'
+      account_status: Status at month end.
+      balance: Balance owed (credit) or held (deposit) at month end.
+      limit_or_original_amount: Credit limit (revolving) or original amount (instalment).
+      minimum_due: Minimum payment or scheduled instalment due this month.
+      payment_made: Payments received this month.
+      overlimit_flag: 'Yes/No: over the credit limit at month end.'
+      write_off_flag: 'Yes/No: written off in or before this month.'
+      salary_credit_amount: Salary credited this month (deposit rows only).
+
+  collections_cases:
+    grain: one row per collections case
+    key: case_id
+    row_level: true
+    description: Collections cases - stage, treatment, hardship and outcome.
+    columns:
+      case_id: Case id (CS-YYYY-...).
+      c360_id: Customer on the case.
+      link_method: 'How the case was linked to a person: crm_id_exact | repaired_account_owner_and_id_edit | repaired_id_collision | repaired_id_edit_only | unmatched.'
+      account_ids: List of account ids on the case.
+      primary_account_id: Main account of the case.
+      primary_product: auto_loan | card | loc | mortgage | overdraft | personal_loan (overdraft = deposit-account overdraft; loc = line of credit).
+      case_open_date: Date the case opened.
+      case_open_reason: manual | missed_payment | overlimit | returned_pad.
+      case_status: charged_off | closed_paid | cured | insolvency_hold | legal | open | placed_agency | settled. Open cases (outcome null) include open, insolvency_hold, legal and placed_agency.
+      current_dpd: Current days past due.
+      current_bucket: STORED current delinquency bucket (use this for reported figures).
+      current_bucket_recomputed: Bucket recomputed from current_dpd. Data-quality questions only.
+      total_overdue: Total overdue amount on the case.
+      total_exposure: Total balance exposed on the case.
+      queue: 'Work queue: early_stage | hardship_specialist | late_stage | mid_stage | recoveries | special_handling.'
+      assigned_agent_id: Assigned agent.
+      current_treatment: agent_call | debt_sale | final_demand_letter | hardship_review | legal_handoff | legal_recovery | outbound_call | senior_agent_escalation | sms_reminder.
+      next_scheduled_action: Next scheduled action.
+      contact_attempts_total: Outbound contact attempts on the case (stored counter).
+      rpc_count: Right-party contacts on the case (stored counter).
+      last_contact_ts: Last contact time.
+      last_rpc_ts: Last right-party contact time.
+      hardship_flag: Case is coded as financial hardship.
+      hardship_reason: bereavement | disability | disaster_evacuation | ei_waiting | illness | job_loss | other | rate_reset | reduced_income | separation | strike_lockout (null when no hardship is recorded).
+      hardship_program_offered: A hardship programme was offered.
+      hardship_program_accepted: A hardship programme was accepted.
+      payment_plan_flag: A payment plan is in place.
+      plan_instalment_amount: Plan instalment amount.
+      settlement_offered_flag: A settlement was offered.
+      dispute_flag: Customer disputes the debt or a fee.
+      complaint_flag: Customer complained.
+      cease_contact_flag: Contact must stop.
+      third_party_rep_flag: A third party represents the customer.
+      insolvency_hold_flag: Insolvency hold.
+      deceased_hold_flag: Deceased hold.
+      legal_referral_flag: Referred to legal.
+      chargeoff_flag: Charged off.
+      nba_recommendation_last: 'Last next-best-action recommendation: call_daytime | call_evening | offer_hardship_plan | send_letter | sms_payment_link.'
+      outcome: 'Case outcome, null while open: charged_off | cured | settled.'
+      outcome_date: Date the case closed.
+      cure_flag: True if the case closed as cured.
+      is_open: True while the case has no outcome.
+      dq_bucket_mismatch: Stored bucket disagrees with current_dpd.
+      province_code: 'Customer''s province at case open: AB | BC | MB | NB | NL | NS | NT | NU | ON | PE | QC | SK | YT.'
+      test_cell: 'Strategy test cell: challenger_A | challenger_B | champion | no_contact_holdout.'
+      strategy_code: Collections strategy
+      assignment_method: random | rule_based. Only 'random' cases give an unbiased comparison between test cells.
+      assigned_team: Team
+      language_of_service: EN | FR.
+      days_in_collections: Days since open
+      entry_dpd: DPD at case open
+      max_dpd_episode: Worst DPD in episode
+      cure_date: Cure date
+      days_to_cure: Days from open to cure
+      promises_total: Promises made in case
+      promises_kept: Kept
+      promises_broken: Broken
+      payments_since_open_amount: Paid since case open
+      hardship_source: agent_coded | customer_form | model.
+      hardship_plan_type: reduced_payment_3m / skip_payment / term_extension / rate_reduction / debt_management_plan
+      dispute_type: billing_error | fraud | late_fee | payment_not_applied.
+      dispute_status: open / resolved_customer / resolved_bank
+      complaint_stage: Level
+      escalation_flag: Escalated to supervisor
+      agency_placement_flag: Placed with third-party agency
+      legal_status: demand_letter / statement_of_claim / judgment / garnishment
+      chargeoff_date: Date the account was charged off
+      chargeoff_amount: Balance charged off (CAD)
+      settlement_amount: Agreed settlement amount (CAD)
+      contact_cap_7d: Max attempts allowed per 7 days
+      contacts_last_7d: Attempts in last 7 days
+      contact_cap_breach_count: Breaches in case
+      out_of_hours_contact_count: Attempts outside permitted hours
+      recidivism_flag: Re-entered collections within 90 days of a prior cure
+      prior_cases_12m: Previous cases in 12 months
+
+  promises_to_pay:
+    grain: one row per promise
+    key: ptp_id
+    row_level: true
+    description: Promises to pay made by customers on collections cases.
+    columns:
+      ptp_id: Promise id.
+      case_id: Case the promise belongs to.
+      c360_id: Customer.
+      ptp_amount: Amount promised.
+      ptp_due_date: Date the promised payment is due.
+      ptp_status: broken | cancelled | kept | open | partially_kept. open = not yet due; cancelled = withdrawn. Rates use kept | partially_kept | broken only.
+      ptp_created_ts: When the promise was made.
+      ptp_channel: 'Channel the promise was made on: app | call | ivr | sms_reply | web.'
+      amount_paid_against: Amount actually paid against the promise.
+      account_id: Account promise applies to (null = whole case)
+      agent_id: Agent who took it (null = self-serve)
+      contact_id: Contact where promise was made
+      product: card / personal_loan / auto_loan / loc / multi
+      ptp_type: instalment_1_of_n | single.
+      ptp_sequence_in_case: Nth promise in case
+      prior_broken_ptp_count: Broken promises before this one
+      overdue_at_creation: Overdue amount when the promise was made (CAD)
+      dpd_at_creation: Days past due when the promise was made
+      grace_days: Days after due before 'broken'
+      paid_date: Date the promised payment was received
+      broken_reason_agent_coded: 'Agent-coded reason a promise broke: dispute | forgot | no_funds | other | unreachable.'
+
+  offers:
+    grain: one row per offer
+    key: offer_id
+    row_level: true
+    description: Hardship and payment-plan offers made on cases, with the customer's response.
+    columns:
+      offer_id: Offer id.
+      case_id: Case.
+      c360_id: Customer.
+      program_id: 'Hardship programme (see hardship_programs): HP-CARD-FPP | HP-CARD-MIN | HP-CARD-RATE | HP-CARD-SKIP | HP-DMP | HP-LOAN-EXT | HP-LOAN-RED3 | HP-LOAN-SKIP | HP-OD-REPAY | HP-SETTLE.'
+      offer_ts: When the offer was made.
+      offered_by: agent | customer_request | nba_system | self_serve_app.
+      proposed_payment_amount: Proposed payment amount.
+      duration_months: Plan length in months.
+      customer_response: accepted | considering | declined | no_response.
+      plan_status: active | broken | completed (null unless accepted).
+      account_id: Account the offer applies to
+      agent_id: Agent who made the offer (blank if digital)
+      contact_id: Contact where offer was made
+      nba_recommended_flag: Incumbent rules engine recommended it
+      eligibility_result: eligible / ineligible_overridden
+      decline_reason: still_unaffordable / wants_lower / will_pay_full / distrust / other
+      response_ts: When the customer responded
+      plan_start_date: Plan start date if accepted
+      plan_payments_due: Plan payments due so far
+      plan_payments_made: Plan payments made so far
+
+  contact_history:
+    grain: one row per contact attempt or inbound contact
+    key: contact_id
+    row_level: true
+    description: Every contact with a customer. About 5% were loaded twice - always filter is_duplicate = false.
+    columns:
+      contact_id: Contact id.
+      case_id: Case.
+      account_id: Account.
+      c360_id: Customer.
+      contact_ts_utc: Contact time (UTC).
+      contact_ts_local: Contact time in the customer's local time (use this for dates and hours).
+      contact_hour_local: Local hour of the contact (0-23).
+      channel: call | chat | email | ivr | letter | push | sms | system (system = internal system events, direction 'internal').
+      direction: inbound | internal | outbound.
+      outcome_code: BKPT | CB | DISP | HARD | IVR | LM | NA | PP | PTP | RPC-NP | RTP | SENT | SYS | WN (meanings in code_lookups, code_type outcome_code).
+      agent_id: Agent on the contact.
+      talk_duration_sec: Talk time in seconds.
+      sms_template_id: SMS template used.
+      letter_template_id: Letter template used.
+      email_template_id: Email template used.
+      payment_amount: Payment taken on the contact.
+      payment_taken_flag: True if a payment was taken.
+      ptp_id: Promise taken on the contact.
+      rpc_flag: True if the right party was reached.
+      hardship_mentioned_flag: Customer mentioned hardship.
+      dispute_raised_flag: Customer raised a dispute.
+      complaint_raised_flag: Customer raised a complaint.
+      cease_request_flag: Customer asked for contact to stop.
+      dq_duplicate_of: contact_id this row duplicates (null for originals).
+      is_duplicate: True if this row is a double-loaded copy. Exclude with is_duplicate = false.
+      dq_channel_renamed: Channel came from the renamed source column.
+      source_platform: app_push | collections_platform | dialer | email_esp | ivr | letter_vendor | sms_gateway | web_chat.
+      sub_channel: e.g. predictive_dial, preview_dial, sms_2way, email_html
+      strategy_code: Strategy that triggered contact
+      test_cell: Cell (copied from case at contact time)
+      attempt_number_case: 'Attempt # in case'
+      within_permitted_hours_flag: Within policy hours
+      stat_holiday_flag: Canadian statutory/provincial holiday
+      day_of_week: "Mon\u2013Sun (local)"
+      consent_status_at_time: Channel consent at event time
+      dial_result: Telephony result
+      abandoned_flag: Call abandoned
+      identity_verified_flag: ID verified before disclosure
+      ptp_made_flag: Promise captured
+      payment_method: debit_card / pad / online_banking / e_transfer
+      callback_requested_flag: Callback requested
+      transferred_flag: Transferred
+      transcript_id: Transcript
+      note_id: Linked agent note
+      inbound_reason: why customer contacted bank
+      contact_cost_cad: Unit cost
+      system_event_type: 'Type of system event (channel = system): bucket_change | payment_received | ptp_broken | ptp_kept.'
+      ops_incident_id: Linked operational incident
+      dpd_at_contact: Case DPD at contact time (point-in-time)
+      bucket_at_contact: Bucket at contact time
+      agent_site: "Site of the agent who handled the contact (null for automated contacts): Calgary | Halifax | Montr\xE9al | Toronto | Windsor | vendor_offshore."
+
+  agent_notes:
+    grain: one row per agent note
+    key: note_id
+    row_level: true
+    description: Agent notes on cases. note_text is only available through the search_text tool.
+    columns:
+      note_id: Note id.
+      note_ts: When the note was written.
+      note_type: call_note | dispute_note | hardship_assessment | payment_note | skip_trace | supervisor_note | system_note.
+      agent_id: Agent who wrote it.
+      case_id: Case.
+      c360_id: Customer.
+      note_text: Free text. Never select it in SQL; use search_text.
+      contact_id: Contact it belongs to
+      account_id: Account
+      note_source: typed / template / dictated / auto_system
+
+  call_transcripts:
+    grain: one row per call transcript
+    key: transcript_id
+    row_level: true
+    description: Call transcripts. transcript_text is only available through the search_text tool.
+    columns:
+      transcript_id: Transcript id.
+      contact_id: Contact the call belongs to.
+      case_id: Case.
+      c360_id: Customer.
+      call_start_ts: Call start time.
+      duration_sec: Call length in seconds.
+      direction: inbound | outbound.
+      language: en-CA | fr-CA.
+      transcript_text: Free text. Never select it in SQL; use search_text.
+      agent_id: Agent on the call
+      call_end_ts: Local end
+
+  bureau_latest:
+    grain: one row per person (latest bureau pull)
+    key: c360_id
+    row_level: true
+    description: Latest credit bureau pull per person.
+    columns:
+      c360_id: Customer.
+      pull_date: Date of the bureau pull.
+      hit_status: hit | no_hit | thin_file.
+      risk_score: Bureau risk score.
+      risk_score_prev_3m: Score three months earlier.
+      risk_score_delta_90d: Score change over 90 days.
+      bankruptcy_score: Bureau bankruptcy score.
+      inquiries_hard_6m: Hard inquiries in 6 months.
+      inquiries_hard_3m: Hard inquiries in 3 months (null on rows hit by load incident DFI-0812).
+      revolving_utilisation: Revolving utilisation across all lenders.
+      total_monthly_obligations: Total monthly debt obligations.
+      total_balance_all_trades: Total balance across all trades.
+      off_us_revolving_balance: Revolving balance with other lenders.
+      off_us_delinquent_trades: Delinquent trades with other lenders.
+      collection_items_count: Collection items on file.
+      high_cost_lender_trades_count: Trades with high-cost lenders.
+      bnpl_trades_count: Buy-now-pay-later trades.
+      new_trades_6m: New trades in 6 months.
+      bankruptcy_on_file_flag: Bankruptcy on the bureau file.
+      consumer_proposal_on_file_flag: Consumer proposal on the bureau file.
+      deceased_indicator: Bureau reports the subject as deceased.
+      fraud_alert_flag: Fraud alert on file.
+      address_mismatch_flag: Bureau address differs from the bank's.
+      dq_shifted_row: Row affected by load incident DFI-0812.
+
+  bureau_history:
+    grain: one row per person per bureau pull
+    key: c360_id + pull_date
+    row_level: true
+    description: History of bureau risk scores.
+    columns:
+      c360_id: Customer.
+      pull_date: Date of the pull.
+      risk_score: Bureau risk score.
+      hit_status: hit / no_hit / thin_file.
+      revolving_utilisation: Utilisation across all revolving trades.
+      delinquent_trades_count: Trades 30+ days late at pull.
+      inquiries_hard_6m: Hard inquiries in prior 6 months.
+      stale_score_flag: 'Yes/No: bureau returned a score older than 12 months.'
+
+  salary_credit_history:
+    grain: one row per deposit account per month
+    key: deposit_account_id + credit_month
+    row_level: true
+    description: Monthly salary credits on deposit accounts.
+    columns:
+      deposit_account_id: Deposit account.
+      c360_id: Account holder.
+      credit_month: Month as text YYYY-MM.
+      credit_amount_total: Salary credited in the month.
+      gap_flag: True if no salary arrived that month.
+      last_credit_date: Date of the last salary credit.
+      account_type: chequing or savings.
+      employer_flag: Y if the credit comes from an employer payroll, N for other income (EI, CPP, transfers).
+      first_credit_date: Date of the first salary credit in the month.
+
+  model_scores:
+    grain: one row per model score
+    key: score_id
+    row_level: true
+    description: Scores from the bank's existing models. Always filter dq_superseded_duplicate = false.
+    columns:
+      score_id: Score id.
+      c360_id: Customer scored.
+      case_id: Case scored (case-level models only).
+      model_name: best_time_to_contact | channel_propensity | collections_risk | contactability | cure_30d | expected_recovery | hardship_propensity | ptp_break | roll_forward_30d | self_cure.
+      model_version: Model version.
+      score_ts: When the score was produced.
+      score_date: Score date.
+      score: Score value (0-1).
+      score_band: high | low | medium | very_high.
+      recommended_action: Action the model recommends.
+      top_reason_1_text: Main reason for the score.
+      uses_protected_attributes: True if the model uses protected attributes.
+      dq_superseded_duplicate: True if a later score replaced this one. Exclude with dq_superseded_duplicate = false.
+      entity_type: customer / case / ptp / account / customer_hour_slot / customer_channel
+      slot_label: For time / channel models
+      risk_grade: "1\u201310"
+      predicted_value: For regression models (expected_recovery)
+
+  hardship_programs:
+    grain: one row per hardship programme
+    key: program_id
+    row_level: false
+    description: Reference list of hardship programmes (placeholder columns).
+    columns:
+      program_id: Program ID
+      version: Program version
+      program_name: Program name
+      product_types: Eligible products
+      policy_section: Section in POL-COLL-004
+      description: Plain-English description
+      min_hardship_level: none / possible / clear
+      max_dpd: Max DPD to be eligible
+      min_months_on_book: Minimum months the account must be open
+      max_uses_12m: Maximum uses in 12 months
+      excludes_insolvency: Customers in insolvency are not eligible
+      excludes_broken_plan_90d: Not eligible if a plan was broken in last 90 days
+      requires_income_evidence: Proof of income is required
+      payment_reduction_pct: Share of the regular payment that is reduced
+      rate_override: New APR during programme
+      duration_months: Program length in months
+      term_extension_max_months: Maximum months the term can be extended
+      fees_waived_flag: Fees are waived during the program
+      approver_level: agent / hardship_specialist / team_lead
+      effective_from: Version start date
+      effective_to: Version end date (9999-12-31 = current)
+
+  agents:
+    grain: one row per agent
+    key: agent_id
+    row_level: false
+    description: Collections agents, non-personal attributes only (placeholder columns).
+    columns:
+      agent_id: Agent ID
+      site: "Calgary | Halifax | Montr\xE9al | Toronto | Windsor | vendor."
+      team_id: Team ID
+      role: agent | hardship_specialist | qa_analyst | senior_agent | team_lead.
+      employment_type: employee / vendor
+      tenure_months: Months since hire
+      languages: EN / FR / others
+      skill_early_stage: "1\u20135"
+      skill_mid_stage: "1\u20135"
+      skill_late_stage: "1\u20135"
+      skill_hardship: "1\u20135"
+      skill_disputes: "1\u20135"
+      skill_auto_loans: "1\u20135"
+      vulnerable_customer_certified: Completed vulnerable-customer training
+      shift_pattern: day / evening / split / weekend
+      status: active / leave / terminated
+
+  case_assignment_history:
+    grain: one row per case assignment
+    key: case_id + assigned_ts
+    row_level: true
+    description: Which agent a case was assigned to, and when (placeholder columns).
+    columns:
+      c360_id: Customer.
+      assignment_id: Assignment ID
+      case_id: Collections case
+      agent_id: Assigned agent
+      team_id: Assigned team
+      queue: Queue at assignment
+      assigned_ts: When the case was assigned
+      unassigned_ts: Null if still assigned
+      assignment_method: rule_router / manual / randomised_pilot
+      continuity_flag: Same agent as the case's previous right-party contact
+      language_match_flag: Agent speaks customer's preferred language
+      certified_for_vulnerable_flag: Agent certified at assignment time
+      dpd_at_assignment: Days past due at assignment
+      overdue_at_assignment: Overdue amount at assignment (CAD)
+      hardship_flag_at_assignment: Hardship flagged at assignment
+      contacts_during: Contacts made during the assignment
+      rpcs_during: Right-party contacts during the assignment
+      ptps_during: Promises to pay taken during the assignment
+      payments_during_amount: Payments received during the assignment (CAD)
+      complaint_during_flag: Complaint raised during the assignment
+
+  code_lookups:
+    grain: one row per code
+    key: code_type + code
+    row_level: false
+    description: Meanings of coded values (placeholder columns).
+    columns:
+      code_type: outcome_code / block_code / product_code / strategy_code / sms_template / email_template / script / contact_rule_set / bureau_reason / routing_rule
+      code: Code value
+      description: Meaning in English
+      description_fr: Meaning in French
+      attributes_json: Type-specific attributes (e.g. contact caps, template text, APR)
+      active_flag: Code is currently in use
+      effective_from: Date the code took effect
+
+  metric_definitions:
+    grain: one row per official metric
+    key: metric_id
+    row_level: false
+    description: The bank's official metric definitions (placeholder columns).
+    columns:
+      metric_id: Metric ID
+      metric_name: Metric name
+      business_definition: What the metric means in business terms
+      formula: Pseudo-SQL
+      grain: account / case / customer / promise / contact
+      time_basis: Time period the metric is measured over
+      default_filters: Filters applied by default
+      unit: pct / count / cad / days / ratio
+      good_direction: up / down
+      synonyms: Phrases users type (for NL-to-SQL)
+      source_tables: Tables used to compute the metric
+      example_question: Example question that uses this metric
+      owner: Team that owns the definition
+      certified_flag: Metric is officially approved
+
+  ops_events:
+    grain: one row per operational event
+    key: event_id
+    row_level: false
+    description: Incidents, outages, releases, data-feed issues and policy changes the operations team knows about. Use it to explain unusual changes in volumes or rates (e.g. a dialer outage, an app outage). Details are in the referenced document (search_policy).
+    columns:
+      event_id: Event id.
+      event_type: app_outage | dialer_outage | platform_release | data_feed_issue | external_economic | policy_change.
+      system: System affected.
+      start_ts: Start (Eastern Time).
+      end_ts: End (Eastern Time).
+      severity: sev1 | sev2 | sev3.
+      description: What happened.
+      affected_tables: Data tables affected.
+      affected_customers_est: Estimated customers affected.
+      reference_doc_id: Incident report or release note (searchable with search_policy).
+
+  qa_checklist:
+    grain: one row per call quality checklist item
+    key: item_no
+    row_level: false
+    description: The 10-item call quality checklist agents are scored against (score = 100 minus the weight of failed items; a failed critical item requires coaching).
+    columns:
+      item_no: Item number.
+      item_code: Item code.
+      item_name: Item name.
+      pass_criteria: What must happen to pass.
+      fail_examples: Examples of a failed item.
+      weight: Points.
+      critical_flag: A fail triggers coaching regardless of the total score.
+      applies_when: When the item is not applicable.
+      evidence_required: Must cite a transcript timestamp.
+      version: Checklist version.
+
+  policy_sections:
+    grain: one row per section of a current reference document
+    key: cite
+    row_level: false
+    description: The bank's current policies, procedures, programme terms, regulatory summaries, call scripts, FAQ and incident reports, one row per section (superseded versions are not included). Search it with search_policy, not SQL.
+    columns:
+      cite: Citation, e.g. 'POL-COLL-001 §5.2'.
+      doc_id: Document id.
+      section: Section id (§x.y or Qn), empty for a one-section document.
+      doc_type: policy | hardship_programme_terms | procedure | regulatory_summary | call_script | faq | incident_report | release_note | data_contract.
+      title: Document title.
+      heading: Section heading.
+      version: Document version.
+      language: EN | FR.
+      effective_date: Date the version took effect.
+      authority: Rank of the document type (higher governs when documents disagree).
+      section_text: Section text (read through search_policy).
+
+  dq_results:
+    grain: one row per data quality check (latest Layer 1 run)
+    key: check_id
+    row_level: false
+    description: Results of Layer 1's data quality checks, latest run only.
+    columns:
+      run_ts: When the checks ran.
+      check_id: Check id (DQ-...).
+      category: duplicates | format | governance | identity | operational | schema_drift | values.
+      table_name: Table checked.
+      issue: What the problem is.
+      records_affected: Records affected.
+      records_total: Records checked.
+      pct: Percentage affected.
+      handling: How Layer 1 handled it.
+      severity: high | info | low | medium.
+
+joins:
+  - promises_to_pay.case_id = collections_cases.case_id
+  - offers.case_id = collections_cases.case_id
+  - contact_history.case_id = collections_cases.case_id
+  - agent_notes.case_id = collections_cases.case_id
+  - call_transcripts.case_id = collections_cases.case_id
+  - call_transcripts.contact_id = contact_history.contact_id
+  - contact_history.ptp_id = promises_to_pay.ptp_id
+  - model_scores.case_id = collections_cases.case_id (case-level models)
+  - collections_cases.primary_account_id = card_accounts.card_account_id (when primary_product = 'card')
+  - collections_cases.primary_account_id = loan_accounts.loan_id (when primary_product = 'loan')
+  - account_monthly_snapshot.account_id = card_accounts.card_account_id or loan_accounts.loan_id
+  - salary_credit_history.deposit_account_id = deposit_accounts.deposit_account_id
+  - offers.program_id = hardship_programs.program_id
+  - collections_cases.assigned_agent_id = agents.agent_id; contact_history.agent_id = agents.agent_id
+  - every table with c360_id joins to customers and customer_summary on c360_id (person level)
+
+terms:
+  broken promise: promises_to_pay.ptp_status = 'broken'
+  kept promise: promises_to_pay.ptp_status = 'kept' (paid in full by the due date)
+  resolved promise: ptp_status IN ('kept', 'partially_kept', 'broken'); promise rates use resolved promises only (open = not yet due, cancelled = withdrawn)
+  promise due: a promise whose ptp_due_date falls in the period
+  self-serve promise: a promise taken without an agent (promises_to_pay.agent_id IS NULL; ptp_channel ivr | web | sms_reply | app)
+  open case: collections_cases.is_open (outcome IS NULL); case_status can be open, insolvency_hold, legal or placed_agency while open
+  closed case: collections_cases.outcome IS NOT NULL; outcome_date is when it closed
+  cured: collections_cases.cure_flag, dated by cure_date
+  delinquent: dpd >= 1 (bucket other than 'current')
+  active account: an account on the current snapshot (dq_stale_snapshot = false); closed and charged-off accounts only appear as older snapshot rows
+  charged off / written off: card_accounts or loan_accounts.chargeoff_flag, dated by chargeoff_date, amount chargeoff_amount
+  roll rate: share of accounts in a bucket at one snapshot that are in a worse bucket at a later snapshot; account_monthly_snapshot has quarter-end snapshots only
+  right-party contact (RPC): contact_history.rpc_flag
+  contact attempt: an outbound contact (direction = 'outbound'); system events have direction 'internal'
+  call attempt: an outbound call (direction = 'outbound' AND channel = 'call')
+  outside permitted hours: contact_history.within_permitted_hours_flag = false
+  dispute: contact_history.dispute_raised_flag (raised on a contact) or collections_cases.dispute_flag (case has a dispute); dispute_type gives the kind
+  hardship case: collections_cases.hardship_flag (agent-coded hardship; hardship_source says who recorded it)
+  customer in financial hardship: customer_summary.financial_hardship_flag
+  unsecured loan: loan_accounts.secured_flag = false (personal_loan, unsecured_loc, student_loc); secured = auto_loan, mortgage
+  randomised cases: collections_cases.assignment_method = 'random'; test_cell is champion | challenger_A | challenger_B | no_contact_holdout
+  duplicate contact: contact_history.is_duplicate (a double-loaded copy of another contact)
+  past due amount: collections_cases.total_overdue for cases; past_due_amount for accounts
+  customer province: collections_cases.province_code (at case open) or customers.province_code
+
+rules:
+  - Reported figures use STORED values (dpd_bucket, current_bucket). Use *_recomputed columns only for data-quality questions, with purpose = "data_quality".
+  - Count contacts with is_duplicate = false unless the question is about duplicates.
+  - All relative dates are relative to the snapshot date, never today's date. Never use current_date or now().
+  - Count distinct entity ids (case_id, c360_id, account id) when a join can multiply rows.
+  - Exclude model_scores rows with dq_superseded_duplicate = true.
+  - Free text (note_text, transcript_text) is read only through search_text, never selected in SQL.
+  - Rates are returned as ratios between 0 and 1; say them as percentages in the answer.
+
+# code_type in l2.code_lookups -> the column it explains. Only these are loaded into the prompt.
+code_columns:
+  outcome_code: contact_history.outcome_code
+  product_code: card_accounts.product_code
+  strategy_code: collections_cases.strategy_code
+
+not_allowed:
+  marketing: Marketing, cross-sell or sales targeting of collections customers.
+  protected_attributes: Analysis or decisions by protected attributes (gender, marital status, citizenship, religion, ethnicity, age, disability, vulnerability, household or newcomer status) or by proxies for them such as postal area, neighbourhood or language.
+  automated_adverse_action: Automated adverse action against customers (for example freezing, closing, charging off or reporting accounts) without a human able to review each case.
+  bulk_contact_export: Exporting or listing customers' contact details (phone numbers, emails, addresses) or bulk lists of identifiable customers.
