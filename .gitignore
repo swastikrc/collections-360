@@ -1,0 +1,10 @@
+warehouse/
+maple_collections_release/
+maple_collections_voice/
+maple_data/
+__pycache__/
+*.pyc
+outputs/layer1/*.log
+warehouse_l3/
+outputs/layer3/
+layer3.zip

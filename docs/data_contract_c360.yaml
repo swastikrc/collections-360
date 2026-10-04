@@ -1,0 +1,127 @@
+# Data contract for the golden Collections 360 data product.
+# Modelled on DC-COLL-001 (contact_history): owner, schema, quality rules, allowed uses, refresh.
+contract_id: DC-C360-001
+version: 1.0.0
+title: "Collections 360: one record per customer"
+status: active
+effective_date: 2026-10-04
+owner:
+  team: Collections Data Office
+  product_owner: "Collections 360 product team (CD Projekt Blaxk)"
+  contact: collections-data-office@maplebank.example.ca
+  steward_for_identity_review: Collections Data Office, identity review desk
+
+description: >
+  One document per person, joining CRM, Cards, Lending, Core banking (deposits and bureau) and
+  Collections. Every source key carries a link status and a match confidence. Built by
+  run_layer1.py (raw -> curated -> golden) and served from MongoDB (collections360.customers),
+  directly or through c360.store.C360Store.
+
+refresh:
+  schedule: "daily 06:00 ET, after source extracts land (contact_history 05:00 ET per DC-COLL-001)"
+  mode: full rebuild with atomic swap (about 10 minutes for 1M customers on one 22-core machine)
+  snapshot_date_field: lineage.snapshot_date
+  latency_sla: "available by 07:00 ET"
+  human_review_decisions: "persist across rebuilds (collections360.match_review_decisions)"
+
+physical:
+  store: MongoDB 7 (NoSQL document database)
+  uri: "mongodb://127.0.0.1:27017 (C360_MONGO_URI)"
+  database: collections360
+  collections:
+    customers: "one document per person, _id = c360_id; $jsonSchema validator enforces required sections"
+    interactions: "append-only write-back store (transcripts, agent-assist notes); also pushed onto the customer document"
+    match_review_queue: "identity links awaiting a person; nothing is deleted"
+    match_review_decisions: "reviewer decisions; persist across rebuilds and override the model"
+    match_llm_verdicts: "optional LLM adjudication of the review queue"
+    dq_results: "data quality check results per build"
+    restricted_protected_attributes: "RESTRICTED: protected attributes, fairness testing only"
+  indexes_on_customers: [identity.crm_ids, identity.card_customer_refs, identity.borrower_refs, identity.cifs, accounts.cards.account_id, accounts.loans.account_id, accounts.deposits.account_id, collections.cases.case_id, contact.province_code, exposure.worst_bucket, exposure.max_dpd, hardship_indicators.financial_hardship_flag, collections.open_cases, collections.cases.is_open, collections.cases.queue, identity.links_pending_review]
+  processing_engine: "DuckDB (warehouse/c360.duckdb) for raw -> curated -> identity resolution; not a serving store"
+  publish: "build into customers_build, index, re-attach interactions, atomic rename to customers"
+  document_export: "python run_layer1.py --export-json (JSON Lines)"
+
+primary_key: c360_id            # 'C360-' + master CRM id; stable while the master record exists
+grain: one person (not one CRM record, not one account)
+
+schema:
+  c360_id: {type: string, required: true, unique: true}
+  master_crm_id: {type: string, required: true}
+  identity:
+    crm_ids: {type: "list<string>", description: "all CRM records of this person, master first"}
+    card_customer_refs: {type: "list<string>"}
+    borrower_refs: {type: "list<string>"}
+    cifs: {type: "list<string>", description: "10-digit core-banking CIF, leading zeros restored"}
+    source_keys: {type: "list<struct>", fields: [src_system, src_ref, link_status, match_confidence, evidence]}
+    min_link_confidence: {type: double, range: [0, 1]}
+    links_pending_review: {type: int}
+  profile: {type: struct, fields: [first_name, middle_name, last_name, preferred_name, date_of_birth, age, age_band, customer_since_date, tenure_months, segment, crm_status, all_crm_records_deleted]}
+  contact: {type: struct, fields: [primary_phone, primary_phone_type, email, address_line1, city, province_code, postal_code, time_zone, returned_mail_flag, preferred_language, preferred_channel, preferred_contact_window, permitted_call_window_local]}
+  servicing_constraints:
+    type: struct
+    description: "strictest value across the person's CRM records; must be honoured before any contact"
+    fields: [consent_call, consent_autodialer, consent_sms, consent_email, voicemail_permitted, contact_at_work_permitted, internal_do_not_call, cease_communication, third_party_authorised, credit_counselling_agency, power_of_attorney, legal_representative, deceased, bankruptcy, consumer_proposal, fraud_victim, military_or_reserve, national_dncl_telemarketing_only]
+  financial_profile: {type: struct, fields: [employment_status, occupation_category, employer_name, pay_frequency, declared_annual_income, income_verified_flag, income_source, housing_status, monthly_housing_cost, internal_risk_grade, salary_avg_6m, salary_avg_prior_6m, salary_gap_months_6m, salary_last_credit_date]}
+  accounts:
+    cards: {type: "list<struct>", description: "current snapshot per card; dpd_bucket recomputed from dpd; link_status and dq_flags per account"}
+    loans: {type: "list<struct>"}
+    deposits: {type: "list<struct>"}
+  exposure: {type: struct, fields: [card_balance_total, loan_outstanding_total, deposit_balance_total, past_due_total, max_dpd, worst_bucket, delinquent_accounts, product_count]}
+  bureau: {type: struct, description: "latest bureau pull plus last 6 scores; dq_shifted_row marks DFI-0812 rows"}
+  collections:
+    cases: {type: "list<struct>", description: "with promises, offers, recomputed bucket, link_method"}
+    open_cases: {type: int}
+    contacts: {type: struct, description: "aggregates over contact_history, duplicates excluded"}
+    recent_notes: {type: "list<struct>", description: "5 most recent agent notes"}
+    call_transcripts: {type: "list<struct>", description: "pointers to transcript JSON files"}
+  hardship_indicators:
+    financial_hardship_flag: {type: boolean}
+    reasons: {type: "list<string>", description: "plain-English reasons for the flag"}
+  model_scores: {type: "list<struct>", description: "latest score per existing model"}
+  data_quality_notes: {type: "list<string>", description: "what was repaired or is pending for this customer"}
+  lineage: {type: struct, fields: [pipeline_version, built_ts, snapshot_date, sources]}
+
+link_status_values:
+  auto_link: "model confident (>= 0.90), clear of the runner-up by >= 0.10, not contradicted by account history"
+  human_confirmed: "a reviewer accepted or relinked"
+  llm_link: "LLM adjudicator >= 90% (optional step); still listed for human confirmation"
+  provisional: "best candidate attached but awaiting review"
+  unmatched: "no candidate attached; in the review queue"
+  human_rejected: "a reviewer rejected the proposed link"
+
+quality_rules:
+  - {id: QR-01, rule: "c360_id unique and not null", threshold: "100%"}
+  - {id: QR-02, rule: "every CRM record maps to exactly one person", threshold: "100%"}
+  - {id: QR-03, rule: "source keys auto-linked or human-confirmed", threshold: ">= 99.5% per source system", measured_at_v1: "cards 99.96%, loans 99.97%, core 99.95%"}
+  - {id: QR-04, rule: "identity-only match agrees with account-history bridge where both exist", threshold: ">= 99.5%", measured_at_v1: "cards 99.96%, loans 99.95%, core 99.99%"}
+  - {id: QR-05, rule: "collections cases linked to a person", threshold: ">= 99.9%", measured_at_v1: "367,215 of 367,229 (99.996%)"}
+  - {id: QR-06, rule: "no protected attribute field anywhere in a customers document", threshold: "0 fields"}
+  - {id: QR-07, rule: "displayed delinquency bucket equals bucket recomputed from dpd", threshold: "100%"}
+  - {id: QR-08, rule: "review queue items older than 5 business days", threshold: "0"}
+  - {id: QR-09, rule: "all data quality checks in c360/layer1/dq.py run and are stored in golden.dq_results", threshold: "every build"}
+  - {id: QR-10, rule: "contact aggregates exclude contacts flagged dq_duplicate_of", threshold: "100%"}
+
+allowed_uses:
+  - collections operations (agent desktop, agent assist, case handling)
+  - customer self-service portal (the logged-in customer's own record only)
+  - next-best-action and affordability decisioning, with a plain-English reason and human review
+  - analytics and model training (with protected attributes excluded)
+  - regulatory and complaint investigation
+not_allowed:
+  - marketing or cross-sell (inherited from DC-COLL-001)
+  - using protected attributes, or proxies such as FSA / postal area, as decision inputs
+  - automated adverse action without a human able to review it
+  - exporting customer contact lists in bulk (Layer 2 refuses these requests)
+
+protected_attributes:
+  location: collections360.restricted_protected_attributes (restricted access)
+  purpose: fairness testing and monitoring only
+  fields: [salutation, gender_code, marital_status, citizenship_status, id_document_type, household_size, dependants_count, newcomer_program_flag, newcomer_arrival_date, accessibility_needs_flag, accessibility_type, vulnerability_flag, vulnerability_type, vulnerability_source, vulnerability_recorded_date, vulnerability_review_date]
+  proxies_not_for_decisions: [contact.postal_code, contact.city, fsa, geo_lat, geo_lon, preferred_language]
+
+privacy_and_security:
+  classification: confidential (synthetic data in this build)
+  pii_fields: [profile.first_name, profile.last_name, profile.date_of_birth, contact.*]
+  llm_sharing: "only the fields needed; account numbers and contact details masked before any LLM call in Layers 2-4"
+  retention: "follows source retention (e.g. contact_history.recording_retention_until); interactions kept per policy"
+  audit: "every link keeps its evidence string; every review decision keeps reviewer and timestamp"
