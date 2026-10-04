@@ -52,7 +52,7 @@ main { padding: 10px 12px 16px; overflow: auto; }
 @media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }
 
 .title { display: flex; align-items: baseline; gap: 12px; margin: 2px 0 10px; }
-.title h1 { font-family: var(--sans); font-size: 20px; margin: 0; color: var(--amber); font-weight: 600; letter-spacing: .3px; }
+.title h1 { font-family: var(--mono); font-size: 19px; margin: 0; color: var(--amber); font-weight: 600; letter-spacing: .3px; }
 .title .sub { color: var(--muted); }
 
 .grid { display: grid; gap: 10px; }
@@ -99,7 +99,9 @@ tr.click:hover, tr.click:focus { background: #1a1f28; outline: none; }
 .banner.hard b { color: var(--yellow); }
 .banner ul { margin: 4px 0 0; padding-left: 18px; }
 
-.nba .action { font-family: var(--sans); font-size: 18px; color: var(--text); margin: 2px 0 6px; }
+/* the suggested step is the headline of the panel: normal font (always renders), highlighted box */
+.nba .action { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--yellow); margin: 4px 0 10px;
+               padding: 8px 10px; background: #14181f; border: 1px solid var(--amber-dim); border-left: 4px solid var(--amber); }
 .nba .code { color: #000; background: var(--cyan); padding: 0 6px; font-size: 11px; margin-right: 8px; }
 .reasons { margin: 6px 0; padding: 0; list-style: none; }
 .reasons li { padding: 3px 0 3px 12px; border-left: 2px solid var(--amber-dim); margin-bottom: 4px; }
