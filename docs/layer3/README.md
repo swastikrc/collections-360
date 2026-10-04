@@ -145,6 +145,14 @@ Run: `. ~/.config/c360/layer2.env && uvicorn c360.layer3.api:app --port 8300`, t
 http://127.0.0.1:8300/terminal and press F10. The Layer 2 API can also run alone:
 `uvicorn c360.api.app:app --port 8000`. See `c360/api/app.py` for the routes.
 
+## Log a conversation (4 Oct)
+
+Paste a transcript or notes on a customer's page. The system extracts hardship, promises, disputes, stop-contact
+requests and more, each with the line it came from. The agent corrects and confirms, and follow-ups go to the
+approvals queue. Protective findings (stop contact, bankruptcy mention) hold contact immediately. Guide:
+[CONVERSATION_LOG.md](CONVERSATION_LOG.md). Specs: `SPEC_L3_CONVERSATION_EXTRACT.md` (built, core scope) and
+`SPEC_L3_AI_NBA.md` (not built).
+
 ## Not done yet
 
 - `C360_L3_SOURCE=api` is written against the SPEC_FRONTEND contract but untested (Layer 2 is a CLI in this repo, with no HTTP API). Use `mongo` for the integrated mode.

@@ -145,6 +145,8 @@ async function route(input, silent) {
     if (head === "WORK" || head === "WORKLIST") return viewWork(arg);
     if (head === "GROUP" || head === "GROUPS") return viewGroups(arg);
     if (head === "ASK") return viewAsk(raw.replace(/^\S+\s*/, ""));
+    if (head === "LOG") return viewLog(arg);
+    if (head === "CONV") return viewConv(arg);
     if (head === "AREA" || head === "PINCODE" || head === "POSTAL") return viewGroups("AREA " + arg);
     if (head === "APPR" || head === "APPROVALS") return viewAppr();
     if (head === "QA" || head === "QUALITY") return viewQa();
@@ -178,6 +180,8 @@ function viewHelp(msg) {
     ["GROUPS [SECTOR|INDUSTRY|EMPLOYER|AREA|CITY|PROVINCE]", "Compare open cases by job sector, industry, employer, postal area, city or province"],
     ["AREA M5V 2T6", "Everyone behind on payments in a postal area (a full postal code or its first 3 characters)"],
     ["ASK <question>", "Ask anything about the portfolio in plain English (Gemini, via Layer 2). Shows the SQL or the documents behind every answer"],
+    ["LOG CS-2026-614370", "Log a conversation you just had: paste the transcript or your notes, check what was found, save it to the customer's file"],
+    ["CONV CNV-…", "Open a conversation that was logged here (read only)"],
     ["CALL 5010384", "Review a recorded call: transcript, what was said, summary, quality score"],
     ["APPROVALS", "Customer requests waiting for a person (hardship plans, stop-contact, disputes, callbacks)"],
     ["QUALITY", "How accurate the automatic call review is, checked against 500 human-labelled calls"],
@@ -510,6 +514,8 @@ async function viewCust(key) {
       h("span", { class: "chip" }, `CALL HOURS ${((ct.permitted_call_window_local || [])[0]) || "07:00"}–${((ct.permitted_call_window_local || [])[1]) || "21:00"} ${ct.time_zone ? "(" + ct.time_zone.split("/").pop().replace("_", " ") + " time)" : ""}`)),
   ];
 
+  if ((doc._overlay || []).length) banners.unshift(h("div", { class: "banner hard" }, h("b", null, "FROM A CONVERSATION LOGGED IN THIS APP"),
+    h("ul", null, doc._overlay.map((e) => h("li", null, overlayText(e))))));
   const caseSel = cases.length > 1 ? h("select", { "aria-label": "Case", onchange: (e) => route(e.target.value) },
     cases.map((c) => h("option", { value: c.case_id, selected: c.case_id === caseId }, `${c.case_id} ${c.outcome ? "(" + c.outcome + ")" : "(open)"}`))) : null;
 
@@ -572,6 +578,22 @@ async function viewCust(key) {
     panel("NOTES", notesList(doc.collections.recent_notes || [])),
     (doc.interactions || []).length ? panel("ACTIONS TAKEN IN THIS APP", h("table", null, h("tbody", null, doc.interactions.slice(0, 8).map((i) => h("tr", null,
       h("td", { class: "muted" }, fmt.ts(i.ts)), h("td", null, fmt.label(i.type)), h("td", { class: i.status === "rejected" ? "bad" : i.status === "pending" ? "warn" : "good" }, i.status), h("td", { class: "muted" }, i.decided_by || i.actor)))))) : null);
+
+  const hasDraft = !!(state.convDrafts && state.convDrafts[caseId]);
+  const convBox = h("div", null, caseId ? loading("CONVERSATIONS") : h("div", { class: "muted" }, "No case."));
+  right.prepend(...[
+    panel("LOG A CONVERSATION", h("div", null, h("div", { class: "muted" }, "Just spoke to the customer? Paste the transcript or your notes."),
+      h("div", { class: "bar" }, h("button", { class: "btn approve", disabled: caseId ? null : true, onclick: () => route("LOG " + caseId) }, !caseId ? "No case selected" : hasDraft ? "RESUME DRAFT" : "+ LOG CONVERSATION"),
+        hasDraft ? h("span", { class: "chip yel" }, "UNSAVED DRAFT") : null))),
+    panel("CONVERSATIONS LOGGED HERE", convBox, "click to open"),
+    (pr.logged || []).length ? panel("PROMISES LOGGED HERE", h("table", null, h("tbody", null, pr.logged.map((x) => h("tr", null, h("td", null, "due " + fmt.date(x.date)), h("td", { class: "n" }, fmt.money(x.amount)),
+      h("td", null, h("span", { class: "chip cyn" }, "LOGGED HERE")), h("td", { class: "muted" }, x.logged_by || ""))))), "from conversations, not yet in the bank's records") : null].filter(Boolean));
+  if (caseId) api(`/cases/${caseId}/conversations`).then((c) => convBox.replaceChildren(c.items.length ? h("table", null, h("tbody", null, c.items.map((it) => {
+    const cp = it.payload, open = () => route("CONV " + cp.conversation_id);
+    return h("tr", { class: "click", tabindex: 0, onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
+      h("td", { class: "muted" }, fmt.date(cp.started_at)), h("td", null, fmt.label(cp.channel)), h("td", null, cp.summary,
+        h("div", null, (c.followups[cp.conversation_id] || []).map((x) => h("span", { class: "chip " + (x.status === "rejected" ? "" : x.status === "pending" ? "yel" : "grn") }, `${CONV_TYPE[x.type] || fmt.label(x.type)}${x.status === "pending" ? " · PENDING" : x.status === "rejected" ? " · REJECTED" : ""}`))))); })))
+    : h("div", { class: "muted" }, "None yet."))).catch((e) => convBox.replaceChildren(errorBox(e)));
 
   setView("cust", title(`${p.first_name || ""} ${p.last_name || ""}`.trim() || doc._id, `${doc._id} · CRM ${doc.master_crm_id} · ${ct.city || ""} ${ct.province_code || ""}${ct.postal_area ? " · area " + ct.postal_area : ""}${wk.sector ? " · " + wk.sector : ""}`), caseSel, ...banners,
     h("div", { class: "grid g-3" }, left, middle, right),
@@ -701,6 +723,7 @@ function nbaPanel(rec, doc) {
       h("span", { class: "k" }, "Send to"), h("span", { class: "v" }, rec.assign_to ? plain("assign", rec.assign_to) : "keep with the assigned agent"),
       h("span", { class: "k" }, "Who can approve"), h("span", { class: "v " + (canApprove() ? "" : "warn") }, plain("role", needs) + (canApprove() ? "" : " (not your role)"))),
     riskEl(rec.promise_risk),
+    (doc._overlay || []).some((e) => e.case_id === rec.case_id) ? h("div", { class: "note" }, "Includes what was logged from a conversation in this app.") : null,
     h("div", { class: "muted", style: "margin-top:8px" }, "WHY THIS STEP"),
     h("ul", { class: "reasons" }, rec.reasons.filter((r) => !(rec.promise_risk && /^Promise risk model/.test(r.text)))   // shown above as the risk line
       .map((r) => h("li", null, r.text, r.cite ? h("span", { class: "cite" }, r.cite) : null))),
@@ -830,6 +853,207 @@ async function viewAsk(initial) {
   if (initial) ask(initial);
 }
 
+// ---------- LOG A CONVERSATION (paste a transcript or notes -> facts, follow-ups, checks) ----------
+// The draft lives in memory only (state.convDrafts); conversation text is never put in browser storage.
+const CONV_FIELDS = [
+  ["hardship", "Hardship", "enum", ["none", "possible", "clear"], "hardship"],
+  ["hardship_reason", "Hardship reason", "enum", [null, "job_loss", "reduced_income", "illness", "disability", "separation", "ei_waiting", "disaster_evacuation", "rate_reset"], "hardship"],
+  ["ptp_mentioned", "Promise to pay", "bool", null, "ptp"],
+  ["ptp_amount", "Promise amount ($)", "number", null, "ptp"],
+  ["ptp_date", "Promise date", "date", null, "ptp"],
+  ["dispute", "Dispute", "bool", null, "dispute"],
+  ["dispute_type", "Dispute type", "enum", [null, "late_fee", "payment_not_applied", "fraud", "billing_error"], "dispute"],
+  ["cease_request", "Asked us to stop contact", "bool", null, "cease_request"],
+  ["insolvency_mention", "Mentioned bankruptcy", "bool", null, "insolvency"],
+  ["vulnerability", "Needs extra care", "bool", null, "vulnerability"],
+  ["complaint", "Complaint", "bool", null, "complaint"],
+  ["third_party_present", "Someone else on the call", "bool", null, "third_party"],
+  ["legal_threat_by_agent", "Agent threatened legal action", "bool", null, "legal_threat"],
+  ["contact_restriction", "Contact wish", "text", null, "contact_restriction"],
+  ["sentiment", "Customer's mood", "enum", ["cooperative", "frustrated", "distressed", "hostile"], null],
+  ["next_step", "Next step", "enum", ["stop_contact", "escalate_supervisor", "dispute_investigation", "hardship_plan_review", "send_payment_link", "call_back"], null],
+];
+const CONV_PROTECTIVE = ["cease_request", "insolvency_mention", "vulnerability", "legal_threat_by_agent"];
+const CONV_KIND = { stop_contact: "Stop contact (contact is held now)", insolvency_check: "Check bankruptcy / consumer proposal (contact is held now)",
+  vulnerability: "Flag for extra care", conduct: "Review agent conduct", promise: "Record the promise", hardship: "Send hardship request to a specialist",
+  dispute: "Open a dispute", contact_preference: "Record the contact wish" };
+const CONV_TYPE = { cease_request: "STOP CONTACT", insolvency_check: "BANKRUPTCY CHECK", vulnerability_flag: "EXTRA CARE", conduct_alert: "CONDUCT REVIEW",
+  promise: "PROMISE LOGGED", hardship_request: "HARDSHIP → APPROVAL", dispute_request: "DISPUTE", contact_preference: "CONTACT WISH" };
+const CONV_PLACEHOLDER = "[00:00] Agent: Hi, this is Priya calling from Maple Bank. This call may be recorded. Can you confirm your date of birth?\n" +
+  "[00:12] Customer: Sure, it's on file. Look, I was laid off three weeks ago and things are really tight.\n" +
+  "[00:25] Agent: I'm sorry to hear that. The amount past due today is $412.50. We do have hardship options like a reduced payment.\n" +
+  "[00:41] Customer: I can pay $150 on the 14th. And please don't call me at work.\n" +
+  "[00:55] Agent: Just to confirm, a payment of $150.00 on October 14. Thank you for your time.";
+
+function convNow() { const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); }
+function convWhere(ev, approx) { return ev ? (approx ? `line ${ev.turn_index + 1}` : `${Number(ev.sec || 0).toFixed(0)}s`) : ""; }
+function convQuote(ev, approx) { return ev ? h("div", { class: "muted" }, `${convWhere(ev, approx)} "${ev.text.slice(0, 110)}${ev.text.length > 110 ? "…" : ""}"`) : null; }
+function convTurns(turns, hl, approx) {
+  return h("div", { class: "turns" }, turns.map((t) => h("div", { class: `turn ${t.speaker} ${hl.has(t.turn_index) ? "hl" : ""}` },
+    h("span", { class: "t" }, approx ? `#${t.turn_index + 1}` : `${Number(t.start_sec || 0).toFixed(0)}s`), h("span", { class: "s" }, fmt.label(t.speaker)), h("span", null, t.text))));
+}
+function convErr(e) { const d = e.data || {}; return h("div", { class: "err" }, d.error || e.message, d.field ? ` (${fmt.label(d.field)})` : ""); }
+
+async function viewLog(arg) {
+  let caseId = (arg || "").trim();
+  if (!caseId && state.lastCustomer && /^CS-/.test(state.lastCustomer)) caseId = state.lastCustomer;
+  if (!/^CS-\d{4}-\d+$/.test(caseId)) return viewHelp("Open a customer first, then click + LOG CONVERSATION (or type LOG followed by a case id).");
+  state.convDrafts = state.convDrafts || {};
+  const d = state.convDrafts[caseId] = state.convDrafts[caseId] || { form: { mode: "transcript", channel: "call", direction: "outbound", started_at: convNow(), language: "auto", duration_min: "", text: "", transcript_json: null },
+    draft: null, corrections: {}, reasons: {}, kinds: null, note: "" };
+  const body = () => ({ mode: d.form.mode, text: d.form.text, transcript_json: d.form.transcript_json, channel: d.form.channel, direction: d.form.direction,
+    started_at: d.form.started_at, language: d.form.language, duration_sec: d.form.duration_min === "" ? null : Math.round(Number(d.form.duration_min) * 60) });
+  const head = title("LOG A CONVERSATION", `case ${caseId} · paste what was said, check what the system found, then save it to the customer's file`);
+
+  function capture(msg) {
+    const sel = (key, opts) => h("select", { onchange: (e) => { d.form[key] = e.target.value; } }, opts.map(([v, l]) => h("option", { value: v, selected: d.form[key] === v }, l)));
+    const counter = h("span", { class: "muted" }, `${d.form.text.length.toLocaleString()} / 20,000`);
+    const ta = h("textarea", { class: "ask-input", rows: 14, maxlength: 20000, placeholder: CONV_PLACEHOLDER });
+    ta.value = d.form.text;
+    ta.addEventListener("input", () => { d.form.text = ta.value; d.form.transcript_json = null; counter.textContent = `${ta.value.length.toLocaleString()} / 20,000`; });
+    const file = h("input", { type: "file", accept: ".txt,.json", "aria-label": "Load a file" });
+    file.addEventListener("change", () => { const f = file.files[0]; if (!f) return; const r = new FileReader();
+      r.onload = () => { const txt = String(r.result || ""); let js = null; if (/\.json$/i.test(f.name)) { try { js = JSON.parse(txt); } catch (e) { js = null; } }
+        if (js && js.turns) { d.form.transcript_json = js; d.form.mode = "transcript"; ta.value = js.turns.map((t) => `${fmt.label(t.speaker)}: ${t.text}`).join("\n"); }
+        else { d.form.transcript_json = null; ta.value = txt.slice(0, 20000); }
+        d.form.text = ta.value; counter.textContent = `${ta.value.length.toLocaleString()} / 20,000`; };
+      r.readAsText(f); });
+    const out = h("div", null, msg || null);
+    const go = h("button", { class: "btn approve" }, "EXTRACT DATA");
+    const run = async () => {
+      if (go.disabled) return; go.disabled = true; out.replaceChildren(loading("READING THE CONVERSATION"));
+      try { d.draft = await api(`/cases/${caseId}/conversations/extract`, { method: "POST", body: body() }); d.corrections = {}; d.reasons = {}; d.kinds = null; review(); }
+      catch (e) { go.disabled = false; out.replaceChildren(convErr(e)); }
+    };
+    go.addEventListener("click", run);
+    ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+    const when = h("input", { type: "datetime-local", value: d.form.started_at, max: convNow() }); when.addEventListener("change", () => { d.form.started_at = when.value; });
+    const dur = h("input", { type: "number", min: 0, max: 240, step: 1, value: d.form.duration_min, placeholder: "optional" }); dur.addEventListener("change", () => { d.form.duration_min = dur.value; });
+    setView("log", head, panel("STEP 1 · WHAT WAS SAID", h("div", null,
+      h("div", { class: "form" },
+        h("label", null, "How"), sel("channel", [["call", "Phone call"], ["sms", "Text messages"], ["email", "Email"], ["chat", "Chat"], ["in_person", "In person"], ["video", "Video call"]]),
+        h("label", null, "Who started it"), sel("direction", [["outbound", "We contacted the customer"], ["inbound", "The customer contacted us"]]),
+        h("label", null, "When"), when,
+        h("label", null, "Language"), sel("language", [["auto", "Detect automatically"], ["en", "English"], ["fr", "French"]]),
+        h("label", null, "Length (minutes)"), dur,
+        h("label", null, "What you're pasting"), sel("mode", [["transcript", "TRANSCRIPT (lines start with Agent: / Customer:)"], ["notes", "MY NOTES (free text)"]])),
+      h("div", { style: "margin-top:8px" }, ta),
+      h("div", { class: "bar" }, go, h("button", { class: "btn", onclick: () => { ta.value = CONV_PLACEHOLDER; d.form.text = ta.value; d.form.mode = "transcript"; counter.textContent = `${ta.value.length.toLocaleString()} / 20,000`; } }, "LOAD EXAMPLE"),
+        h("button", { class: "btn", onclick: () => route(caseId) }, "CANCEL"), h("span", { class: "muted" }, "or load a .txt / .json file "), file, counter),
+      h("div", { class: "note" }, "Card numbers, SINs, phone numbers and emails are masked before anything is stored. Nothing is saved until you confirm on the next step. Ctrl+Enter = extract."),
+      out), "transcript or your own notes"));
+    ta.focus();
+    if (new URLSearchParams(location.search).get("sample") === "1" && !d.form.text) { d.form.text = ta.value = CONV_PLACEHOLDER; run(); }   // demo link
+  }
+
+  function review() {
+    const dr = d.draft, approx = !!dr.times_approximate;
+    const fields = dr.fields_final || dr.fields;
+    if (d.kinds === null) d.kinds = dr.proposed_updates.filter((u) => u.default_selected || u.mandatory).map((u) => u.kind);
+    const hl = new Set(Object.values(dr.evidence || {}).filter(Boolean).map((e) => e.turn_index));
+    const msg = h("div");
+    const changed = (k) => Object.prototype.hasOwnProperty.call(d.corrections, k);
+    let timer = null;
+    const recheck = () => { clearTimeout(timer); timer = setTimeout(async () => {
+      try { d.draft = await api(`/cases/${caseId}/conversations/extract`, { method: "POST", body: { ...body(), corrections: d.corrections, correction_reasons: d.reasons, selected_kinds: d.kinds } }); review(); }
+      catch (e) { msg.replaceChildren(convErr(e)); } }, 350); };
+    const setField = (k, v) => { if (v === dr.fields[k] || (v === "" && dr.fields[k] === null)) delete d.corrections[k]; else d.corrections[k] = v === "" ? null : v; recheck(); };
+    const control = ([k, , type, opts]) => {
+      const v = fields[k];
+      if (type === "bool") {
+        if (v === null) return h("span", { class: "muted" }, "not assessed (notes)");
+        const c = h("input", { type: "checkbox", checked: v === true ? true : null, "aria-label": k }); c.addEventListener("change", () => setField(k, c.checked)); return c;
+      }
+      if (type === "enum") { const s = h("select", null, opts.map((o) => h("option", { value: o === null ? "" : o, selected: (v ?? "") === (o ?? "") }, o === null ? "—" : plain("hardship", o))));
+        s.addEventListener("change", () => setField(k, s.value === "" ? null : s.value)); return s; }
+      const i = h("input", { type: type === "number" ? "number" : type === "date" ? "date" : "text", step: "0.01", value: v ?? "" });
+      i.addEventListener("change", () => setField(k, type === "number" ? (i.value === "" ? null : Number(i.value)) : i.value)); return i;
+    };
+    const rows = CONV_FIELDS.map((f) => { const [k, label, , , evKey] = f;
+      const needWhy = CONV_PROTECTIVE.includes(k) && dr.fields[k] === true && d.corrections[k] === false;
+      const why = needWhy ? h("input", { placeholder: "Why is this not right? (required)", value: d.reasons[k] || "", style: "width:100%" }) : null;
+      if (why) why.addEventListener("input", () => { d.reasons[k] = why.value; });
+      return h("tr", null, h("td", { class: "muted" }, label, changed(k) ? h("span", { class: "chip yel", style: "margin-left:6px" }, "CHANGED") : null),
+        h("td", null, control(f), why), h("td", null, convQuote((dr.evidence || {})[evKey], approx))); });
+    const alertRows = (dr.alerts || []).map((a) => h("li", null, a.text, a.cite ? h("span", { class: "cite" }, a.cite) : null, convQuote(a.evidence, approx)));
+    const stop = (dr.alerts || []).filter((a) => a.level === "stop"), care = (dr.alerts || []).filter((a) => a.level !== "stop");
+    const updates = dr.proposed_updates.map((u) => { const c = h("input", { type: "checkbox", checked: d.kinds.includes(u.kind) || u.mandatory ? true : null, disabled: u.mandatory ? true : null, "aria-label": CONV_KIND[u.kind] });
+      c.addEventListener("change", () => { d.kinds = c.checked ? [...new Set([...d.kinds, u.kind])] : d.kinds.filter((x) => x !== u.kind); recheck(); });
+      return h("div", { class: "upd" }, c, " ", h("b", null, CONV_KIND[u.kind] || fmt.label(u.kind)), u.mandatory ? h("span", { class: "chip red", title: "Cannot be skipped" }, "🔒 REQUIRED") : null,
+        h("span", { class: "chip" }, "approval: " + (u.needs === "agent" ? "you" : plain("role", u.needs).toLowerCase())),
+        h("div", { class: "muted" }, u.why, u.cite ? h("span", { class: "cite" }, u.cite) : null)); });
+    const blocking = (dr.checks || []).filter((c) => c.blocking);
+    const note = h("textarea", { placeholder: "Your note (optional)", maxlength: 1000, style: "width:100%;background:#000;border:1px solid var(--rule);margin-top:6px" }); note.value = d.note; note.addEventListener("input", () => { d.note = note.value; });
+    const save = h("button", { class: "btn approve", disabled: blocking.length ? true : null }, "SAVE TO CUSTOMER FILE");
+    save.addEventListener("click", async () => {
+      if (save.disabled) return; save.disabled = true; msg.replaceChildren(loading("SAVING"));
+      const selected = dr.proposed_updates.filter((u) => u.mandatory || d.kinds.includes(u.kind)).map((u) => u.id);
+      try {
+        const out = await api(`/cases/${caseId}/conversations`, { method: "POST", body: { ...body(), corrections: d.corrections, correction_reasons: d.reasons, selected_updates: selected, agent_note: d.note || null, confirm: true } });
+        delete state.convDrafts[caseId];
+        const made = ["Conversation logged"].concat(out.created.map((i) => i.type === "promise" ? `Promise ${fmt.money(i.payload.amount)} on ${fmt.date(i.payload.date)} recorded`
+          : `${CONV_TYPE[i.type] || fmt.label(i.type)} sent for approval${["cease_request", "insolvency_check"].includes(i.type) ? " (contact on hold now)" : ""}`));
+        setView("log", head, h("div", { class: "banner", style: "border-color:var(--green);background:#0c1b10" }, h("b", { style: "color:var(--green)" }, "SAVED"), made.join(" · "),
+          h("div", { class: "bar" }, h("button", { class: "btn approve", onclick: () => route(caseId) }, "OPEN CUSTOMER"))));
+        setTimeout(() => { if (state.view === "log") route(caseId); }, 2000);
+      } catch (e) {
+        save.disabled = false; const det = e.data || {};
+        msg.replaceChildren(convErr(e), det.checks ? h("ul", { class: "reasons conflicts" }, det.checks.filter((c) => c.blocking).map((c) => h("li", null, c.text, c.cite ? h("span", { class: "cite" }, c.cite) : null))) : null);
+      }
+    });
+    const discard = h("div", { hidden: true, class: "note" }, "Discard this draft? ", h("button", { class: "btn reject", onclick: () => { delete state.convDrafts[caseId]; route(caseId); } }, "YES, DISCARD"), " ",
+      h("button", { class: "btn", onclick: () => { discard.hidden = true; } }, "KEEP"));
+    const qa = dr.qa;
+    setView("log", head, h("div", { class: "grid g-2" },
+      panel("CONVERSATION", h("div", null, (dr.warnings || []).map((w) => h("div", { class: "warn" }, w)), convTurns(dr.turns, hl, approx)), "highlighted = where a finding came from · masked"),
+      h("div", { class: "grid" },
+        stop.length || care.length ? panel("MUST KNOW", h("div", null,
+          stop.length ? h("ul", { class: "reasons conflicts" }, alertRows.slice(0, stop.length)) : null,
+          care.length ? h("ul", { class: "reasons safeguards" }, alertRows.slice(stop.length)) : null)) : null,
+        panel("SUMMARY", h("div", null, h("div", { style: "font-size:15px" }, dr.summary), Object.keys(d.corrections).length ? h("div", { class: "note" }, "Updated with your changes; the final summary is written when you save.") : null)),
+        panel("WHAT WAS SAID (FOUND AUTOMATICALLY)", h("table", null, h("tbody", null, rows)), "change anything that is wrong"),
+        panel("UPDATES TO MAKE", updates.length ? h("div", null, updates) : h("div", { class: "muted" }, "Nothing to update: only the conversation itself will be logged."), "ticked ones are created when you save"),
+        (dr.checks || []).length ? panel("CHECKS", h("ul", { class: "reasons " + (blocking.length ? "conflicts" : "safeguards") }, dr.checks.map((c) => h("li", null, c.blocking ? "Fix before saving: " : "", c.text, c.cite ? h("span", { class: "cite" }, c.cite) : null)))) : null,
+        panel(qa ? `CALL QUALITY SCORE ${qa.score}/100` : "CALL QUALITY", qa ? h("div", null, qa.coaching_required ? h("div", { class: "bad" }, "COACHING NEEDED: " + qa.critical_failures.map(fmt.label).join(", ")) : h("div", { class: "good" }, "No serious failures"),
+          h("table", { class: "qa" }, h("tbody", null, qa.items.map((i) => h("tr", { title: i.pass_criteria }, h("td", null, i.item_no), h("td", null, i.name),
+            h("td", { class: i.verdict === "pass" ? "pass" : i.verdict === "fail" ? "fail" : "na" }, i.verdict.replace("_", " ").toUpperCase()), h("td", { class: "n" }, i.weight)))))) : h("div", { class: "muted" }, "Quality score needs a transcript.")),
+        panel("SAVE", h("div", null, note,
+          h("div", { class: "bar" }, save, h("button", { class: "btn", onclick: () => capture() }, "EDIT TEXT"), h("button", { class: "btn reject", onclick: () => { discard.hidden = false; } }, "DISCARD")),
+          discard, msg, h("div", { class: "note" }, "The server reads the text again when you save; your changes are stored next to what was found automatically."))))));
+  }
+  if (d.draft) review(); else capture();
+}
+
+async function viewConv(id) {
+  if (!id) return viewHelp("Type CONV followed by a conversation id (shown on the customer page).");
+  setView("log", loading("CONVERSATION " + id));
+  const r = await api("/conversations/" + encodeURIComponent(id));
+  const it = r.conversation, p = it.payload, f = p.fields_final, approx = p.mode === "notes" || (p.warnings || []).includes("Times are approximate.");
+  const hl = new Set(Object.values(p.evidence || {}).filter(Boolean).map((e) => e.turn_index));
+  const corr = Object.fromEntries((p.corrections || []).map((c) => [c.field, c]));
+  const show = (v) => v === null || v === undefined ? "—" : v === true ? "yes" : v === false ? "no" : fmt.label(v);
+  setView("log", title("CONVERSATION " + p.conversation_id, `case ${it.case_id} · ${fmt.ts(p.started_at)} · ${fmt.label(p.channel)} · logged by ${it.actor} at ${fmt.ts(it.ts)} · read only`),
+    h("div", { class: "grid g-2" },
+      panel("CONVERSATION (MASKED)", convTurns(p.turns_masked || [], hl, approx)),
+      h("div", { class: "grid" },
+        panel("SUMMARY", h("div", null, h("div", { style: "font-size:15px" }, p.summary), p.agent_note ? h("div", { class: "muted", style: "margin-top:6px" }, "Agent's note: " + p.agent_note) : null,
+          h("div", { style: "margin-top:6px" }, h("span", { class: "id", onclick: () => route(it.case_id) }, "open case " + it.case_id)))),
+        panel("FOLLOW-UPS", (r.followups || []).length ? h("table", null, h("tbody", null, r.followups.map((x) => h("tr", null, h("td", null, CONV_TYPE[x.type] || fmt.label(x.type)),
+          h("td", { class: x.status === "rejected" ? "bad" : x.status === "pending" ? "warn" : "good" }, x.status), h("td", { class: "muted" }, x.decided_by || ""))))) : h("div", { class: "muted" }, "None.")),
+        panel("WHAT WAS SAID", h("table", null, h("tbody", null, CONV_FIELDS.map(([k, label]) => h("tr", null, h("td", { class: "muted" }, label), h("td", null, show(f[k])),
+          h("td", { class: "muted" }, corr[k] ? `changed from ${show(corr[k].from)}${corr[k].reason ? " — " + corr[k].reason : ""}` : ""))))), p.engine))));
+}
+
+// plain words for the effects of logged conversations (customer page banner)
+function overlayText(e) {
+  const what = { cease_contact_flag: "Customer asked us to stop contacting them. Calls, texts and emails are on hold now.", insolvency_hold_flag: "Bankruptcy or a consumer proposal was mentioned. Contact is on hold until it is checked.",
+    vulnerable_customer_flag: "The customer may need extra care: safeguards apply.", hardship_flag: "Hardship was stated: offer help before asking for payment.", dispute_flag: "A dispute was raised: sort it out before collecting the disputed amount.",
+    "promises.logged": e.value && e.value.amount != null ? `Promise of ${fmt.money(e.value.amount)} on ${fmt.date(e.value.date)} was logged.` : "A promise was logged.",
+    contact_preference: `Contact wish: "${e.value}".`, conduct_alert: "A call was flagged for an agent conduct review." }[e.field] || fmt.label(e.field);
+  const st = e.status === "pending" ? "waiting for approval" : e.status;
+  return `${what} Logged ${fmt.date(e.ts)} by ${e.logged_by} · ${st}.`;
+}
+
 // ---------- CALL ----------
 async function viewCall(id) {
   setView("call", loading("CALL " + id));
@@ -892,11 +1116,15 @@ async function viewAppr() {
       try { await api(`/approvals/${i.id}`, { method: "POST", body: { status, reason: reason.value || null } }); msg.replaceChildren(h("span", { class: "ok" }, status.toUpperCase())); setTimeout(viewAppr, 700); }
       catch (e) { msg.replaceChildren(errorBox(e)); }
     };
-    const what = i.type === "hardship_request" ? `${p.program_id} ${p.program_name || ""} · reason ${fmt.label(p.reason)}${p.estimate && p.estimate.amount != null ? ` · ~${fmt.money(p.estimate.amount)}/mo × ${p.estimate.months}` : ""}${p.requires_income_evidence ? " · needs income evidence" : ""}`
+    const what = i.type === "hardship_request" && !p.program_id ? `Programme: to be chosen by the specialist · reason ${plain("hardship", p.reason)}${p.evidence ? ` · "${String(p.evidence).slice(0, 90)}"` : ""}`
+      : i.type === "hardship_request" ? `${p.program_id} ${p.program_name || ""} · reason ${fmt.label(p.reason)}${p.estimate && p.estimate.amount != null ? ` · ~${fmt.money(p.estimate.amount)}/mo × ${p.estimate.months}` : ""}${p.requires_income_evidence ? " · needs income evidence" : ""}`
       : i.type === "cease_request" ? "Written cease-communication request (POL-COLL-001 §5.4)"
       : i.type === "dispute_request" ? `${fmt.label(p.dispute_type)}: ${p.details || ""}`
       : i.type === "callback_request" ? `Callback ${p.time || ""} · ${p.topic || ""}`
-      : i.type === "contact_preference" ? `Channels: ${JSON.stringify(p.channels || {})}` : "";
+      : i.type === "contact_preference" ? (p.note ? `Contact wish: "${p.note}"` : `Channels: ${JSON.stringify(p.channels || {})}`)
+      : i.type === "vulnerability_flag" ? "Possible vulnerability: check and confirm"
+      : i.type === "insolvency_check" ? "Bankruptcy mentioned: verify before any contact"
+      : i.type === "conduct_alert" ? "Agent conduct: review call" : "";
     return h("tr", null, h("td", { class: "muted" }, fmt.ts(i.ts)), h("td", null, h("span", { class: "id", onclick: () => route(i.case_id) }, i.case_id)),
       h("td", null, fmt.label(i.type)), h("td", null, what, p.note ? h("div", { class: "muted" }, "Customer: " + p.note) : null),
       h("td", null, p.approver_level ? fmt.label(p.approver_level) : "agent"),

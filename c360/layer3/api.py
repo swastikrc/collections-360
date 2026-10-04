@@ -228,7 +228,7 @@ def conversation_extract(case_id: str, body: dict = Body(...), user=Depends(empl
     """Read the pasted text and return a draft for the agent to review. Writes nothing."""
     doc, case = _conv_case(case_id)
     try:
-        return conversation.extract(conversation.clean_input(body), doc, case)
+        return conversation.preview(body, doc, case)
     except conversation.ConvError as e:
         raise HTTPException(e.status, e.detail)
 

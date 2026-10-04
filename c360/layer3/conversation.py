@@ -451,7 +451,28 @@ def validate(updates, selected, fields, case, conversation_date=None) -> list[di
 
 # ---------------------------------------------------------------- save
 
-def _apply_corrections(fields, corrections, reasons):
+def preview(body, doc, case) -> dict:
+    """extract() plus the agent's corrections so far: proposals, checks and summary recomputed. Writes nothing."""
+    inp = clean_input(body)
+    draft = extract(inp, doc, case)
+    fields = dict(draft["fields"])
+    diff = _apply_corrections(fields, body.get("corrections"), body.get("correction_reasons"), require_reason=False)
+    if diff:
+        if not any(d["field"] == "next_step" for d in diff):
+            fields["next_step"] = _next_step(fields, draft["evidence"])
+        updates = propose(fields, case, draft["evidence"], inp["channel"])
+        kinds = body.get("selected_kinds")
+        chosen = [u["id"] for u in updates if u["mandatory"] or (u["kind"] in kinds if isinstance(kinds, list) else u["default_selected"])]
+        draft.update(fields_final=fields, corrections=diff, proposed_updates=updates, summary=summarise(fields),
+                     alerts=alerts(fields, draft["evidence"]),
+                     checks=validate(updates, chosen, fields, case, dt.datetime.fromisoformat(inp["started_at"]).date()))
+    elif isinstance(body.get("selected_kinds"), list):
+        chosen = [u["id"] for u in draft["proposed_updates"] if u["mandatory"] or u["kind"] in body["selected_kinds"]]
+        draft["checks"] = validate(draft["proposed_updates"], chosen, fields, case, dt.datetime.fromisoformat(inp["started_at"]).date())
+    return draft
+
+
+def _apply_corrections(fields, corrections, reasons, require_reason=True):
     diff = []
     for name, value in (corrections or {}).items():
         if name not in fields:
@@ -475,7 +496,7 @@ def _apply_corrections(fields, corrections, reasons):
         if fields[name] == value:
             continue
         reason = ((reasons or {}).get(name) or "").strip()
-        if name in PROTECTIVE and fields[name] is True and value is False and not reason:
+        if require_reason and name in PROTECTIVE and fields[name] is True and value is False and not reason:
             raise ConvError(400, {"error": f"Say why '{name.replace('_', ' ')}' is not right before changing it.", "field": name})
         diff.append({"field": name, "from": fields[name], "to": value, "reason": reason[:500] or None})
         fields[name] = value
