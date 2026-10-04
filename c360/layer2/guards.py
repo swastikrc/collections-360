@@ -208,8 +208,13 @@ def output_guard(answer: Answer, trace: Trace, question="") -> Answer:
         warnings.append(f"Redacted {counts['field']} personal or protected field(s) from the answer.")
 
     if answer.status != "refused":
-        for number in ungrounded_numbers([answer.answer_text, answer.insight], trace, question):
+        ungrounded = ungrounded_numbers([answer.answer_text, answer.insight], trace, question)
+        for number in ungrounded:
             warnings.append(f"number not found in results: {number}")
+        # figures with no successful tool result behind them are never presented as an answer
+        if answer.status == "answered" and not any(r.ok for r in trace.results) and (ungrounded or (answer.table and answer.table.rows)):
+            answer.status = "partial"
+            warnings.append("No data was retrieved for this answer: its figures are not backed by a query or a document.")
     answer.warnings = warnings
     return answer
 
@@ -220,3 +225,30 @@ def contains_personal_data(answer: Answer) -> list[str]:
     found = [m.group(0) for m in EMAIL.finditer(blob)] + [m.group(0) for m in PHONE.finditer(blob)]
     found += [m.group(0) for m in _IDENTIFIER.finditer(blob) if deny_list.is_denied(m.group(0))]
     return found
+
+
+def remove_names(answer: Answer, names) -> Answer:
+    """Replace the given customer names in the answer with 'the customer' (names are personal data)."""
+    if not names:
+        return answer
+    rx = re.compile(r"\s*\(?\b(?:" + "|".join(re.escape(n) for n in names) + r")\b(?:\s+\b(?:" + "|".join(re.escape(n) for n in names) + r")\b)*\)?", re.I)
+    hits = 0
+
+    def fix(text):
+        nonlocal hits
+        if not isinstance(text, str) or not text:
+            return text
+        def sub(m):
+            nonlocal hits
+            hits += 1
+            return "" if m.group(0).strip().startswith("(") else " the customer"
+        out = rx.sub(sub, text)
+        return re.sub(r"\b(the customer)\s+the customer\b", r"\1", out, flags=re.I).replace("  ", " ").strip() if out != text else text
+
+    answer.answer_text = fix(answer.answer_text)
+    answer.insight = fix(answer.insight)
+    if answer.table:
+        answer.table.rows = [[fix(c) for c in row] for row in answer.table.rows]
+    if hits:
+        answer.warnings = list(answer.warnings) + [f"Removed {hits} customer name mention(s) from the answer."]
+    return answer

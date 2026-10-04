@@ -197,7 +197,7 @@
   question: What was the roll rate out of the 1-30 bucket in June 2026?
   expected:
     kind: scalar
-    value: 0.323529
+    value: 0.460317
     unit: ratio
     tolerance: 0.005
   tags:
@@ -227,21 +227,21 @@
     - from_bucket
     rows:
     - from_bucket: 1-30
-      value: 0.281915
+      value: 0.383333
     - from_bucket: 121-150
-      value: 0.827586
+      value: 0.730769
     - from_bucket: 151-180
-      value: 0.594595
+      value: 0.566667
     - from_bucket: 180+
       value: 0.0
     - from_bucket: 31-60
-      value: 0.43038
+      value: 0.384615
     - from_bucket: 61-90
-      value: 0.586207
+      value: 0.62
     - from_bucket: 91-120
-      value: 0.692308
+      value: 0.684211
     - from_bucket: current
-      value: 0.080357
+      value: 0.051262
     unit: ratio
     tolerance: 0.005
   tags:
@@ -268,9 +268,9 @@
     - product_family
     rows:
     - product_family: card
-      value: 0.232751
+      value: 0.196985
     - product_family: loan
-      value: 0.227074
+      value: 0.1872
     unit: ratio
     tolerance: 0.005
   tags:

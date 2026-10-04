@@ -62,7 +62,7 @@ When you have what you need, reply with **only** a JSON object in this shape, wi
 - `status`: "answered" when the question is fully answered; "partial" when you could only answer part of it or the results are uncertain (say why in `answer_text`); "refused" only together with `refusal`.
 - `interpretation`: how you read the question, as short tokens: the metric or subject, the period as dates, the breakdown.
 - `answer_text`: plain language a manager can read aloud. Lead with the answer. Mention when a group is very small.
-- `table`: include it when the result has more than one row (at most 20 rows). Use readable column names. Otherwise null.
+- `table`: include it when the result has more than one row (at most 20 rows). Use readable column names. Otherwise null. Keep group values exactly as the tool returned them (an hour stays 5, not 05:00; a code stays the code) and keep rates as the returned ratio or as a percentage of it; do not re-label or re-bucket rows.
 - `insight`: one line the numbers support, or null. No speculation about causes the data does not show.
 - `follow_ups`: up to 3 questions this system can answer next.
 - Do not list SQL, sources or warnings: the system adds them from what you actually ran.

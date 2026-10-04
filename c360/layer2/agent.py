@@ -5,6 +5,7 @@ in the prompt: the tool-call budget, duplicate-call detection, the stop after tw
 errors, and the single repair attempt for a malformed final answer.
 """
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -53,6 +54,7 @@ class Agent:
                            model=getattr(self.llm, "name", None), tool_calls=trace.tool_calls,
                            latency_ms=int((time.time() - t0) * 1000))
         answer = guards.output_guard(answer, trace, question)
+        answer = guards.remove_names(answer, customer_names(self.ctx, question, trace))
         if self.write_audit:
             audit.write(question, answer, trace, self.audit_path)
         return AgentResult(answer, trace)
@@ -67,13 +69,19 @@ class Agent:
 
         max_calls = self.ctx.settings.max_tool_calls
         messages = list(history)[-2 * MAX_HISTORY_TURNS:] + [Message(role="user", text=question)]
-        calls, seen, consecutive_errors = 0, set(), 0
+        calls, seen, consecutive_errors, nudged = 0, set(), 0, False
 
         while True:
             turn = self._generate(messages, self.tools, trace)
             if turn.error:
                 return self._llm_failed(turn.error, trace)
             if not turn.tool_calls:
+                # A final answer with figures but no data behind it: send it back once to use the tools.
+                if not nudged and not any(r.ok for r in trace.results) and _claims_data(turn.text):
+                    nudged = True
+                    messages.append(Message(role="assistant", text=turn.text or ""))
+                    messages.append(Message(role="user", text=NO_DATA_MSG))
+                    continue
                 return self._finalize(turn.text, messages, trace)
 
             if trace.plan is None and turn.text and turn.text.strip():
@@ -174,6 +182,43 @@ class Agent:
         if answer.refusal is not None and answer.status != "refused":
             answer.refusal = None
         return answer
+
+
+NO_DATA_MSG = ("You gave figures without calling any tool, so nothing backs them. Call the right tool now (compute_metric, "
+               "run_sql, search_policy, search_text or get_customer) and answer only from its result. If the data does not "
+               "exist, call refuse.")
+
+
+def _claims_data(text) -> bool:
+    """True if a final message states figures or a table (so it needs a tool result behind it)."""
+    try:
+        a = parse_llm_answer(text or "")
+    except ValueError:
+        return False
+    if a.status != "answered":
+        return False
+    return bool(a.table and a.table.rows) or bool(re.search(r"\d", a.answer_text or ""))
+
+
+def customer_names(ctx, question, trace) -> list[str]:
+    """Names of the customers this question touched (case / customer ids in the question or the tool calls), so they
+    can be taken out of the answer. Never raises."""
+    keys = set(re.findall(r"\b(?:CS-\d{4}-\d+|C360-[A-Z]{3}-\d{4})\b", str(question)))
+    for s in trace.steps:
+        for v in (s.args or {}).values():
+            if isinstance(v, str):
+                keys.update(re.findall(r"\b(?:CS-\d{4}-\d+|C360-[A-Z]{3}-\d{4})\b", v))
+    names = []
+    try:
+        from c360.store import C360Store
+        store = C360Store(database=ctx.mongo_db())
+        for k in sorted(keys)[:5]:
+            doc = store.get(k) if store.query_for(k) is not None else None
+            p = (doc or {}).get("profile") or {}
+            names += [str(p[f]) for f in ("first_name", "middle_name", "last_name", "preferred_name") if p.get(f)]
+    except Exception:       # noqa: BLE001
+        pass
+    return sorted({n for n in names if len(n) >= 3}, key=len, reverse=True)
 
 
 def _error_payload(tool, message) -> str:

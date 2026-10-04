@@ -438,6 +438,11 @@ tables:
       system_event_type: 'Type of system event (channel = system): bucket_change | payment_received | ptp_broken | ptp_kept.'
       ops_incident_id: Linked operational incident
       dpd_at_contact: Case DPD at contact time (point-in-time)
+      sms_delivered_flag: True if the SMS was delivered.
+      payment_link_id: Payment link sent on this contact (null if none).
+      link_clicked_flag: True if the customer clicked the payment link.
+      link_click_ts: When the link was clicked.
+      link_payment_flag: True if a payment was made through the link.
       bucket_at_contact: Bucket at contact time
       agent_site: "Site of the agent who handled the contact (null for automated contacts): Calgary | Halifax | Montr\xE9al | Toronto | Windsor | vendor_offshore."
 
@@ -778,7 +783,7 @@ terms:
   contact attempt: an outbound contact (direction = 'outbound'); system events have direction 'internal'
   call attempt: an outbound call (direction = 'outbound' AND channel = 'call')
   outside permitted hours: contact_history.within_permitted_hours_flag = false
-  dispute: contact_history.dispute_raised_flag (raised on a contact) or collections_cases.dispute_flag (case has a dispute); dispute_type gives the kind
+  dispute: contact_history.dispute_raised_flag (raised on a contact) or collections_cases.dispute_flag (case has a dispute). The kind of dispute (dispute_type) is recorded only on the case, never on the contact - to count disputes raised in a period, count contacts with dispute_raised_flag in that period; do not filter them by the case's dispute_type
   hardship case: collections_cases.hardship_flag (agent-coded hardship; hardship_source says who recorded it)
   customer in financial hardship: customer_summary.financial_hardship_flag
   unsecured loan: loan_accounts.secured_flag = false (personal_loan, unsecured_loc, student_loc); secured = auto_loan, mortgage
@@ -789,7 +794,7 @@ terms:
 
 rules:
   - Reported figures use STORED values (dpd_bucket, current_bucket). Use *_recomputed columns only for data-quality questions, with purpose = "data_quality".
-  - Count contacts with is_duplicate = false unless the question is about duplicates.
+  - Rates over contacts use is_duplicate = false. For a plain COUNT of contacts or events, return both figures in one query - the count as loaded (all rows) first, and the count without double-loaded rows (is_duplicate = false) - and state both.
   - All relative dates are relative to the snapshot date, never today's date. Never use current_date or now().
   - Count distinct entity ids (case_id, c360_id, account id) when a join can multiply rows.
   - Exclude model_scores rows with dq_superseded_duplicate = true.

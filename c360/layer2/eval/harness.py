@@ -153,6 +153,15 @@ def run_set(name, limit=None, fake=False, delay=0.0, questions_dir=None, synthet
         from c360.layer2.llm import get_llm
         llm = get_llm()
     model = "fake-plan" if fake else getattr(llm, "label", None) or getattr(llm, "name", "unknown")
+    out_dir = Path(out_dir) if out_dir else config.settings().out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+    md, js = out_dir / f"eval_{name}_{stamp}.md", out_dir / f"eval_{name}_{stamp}.json"
+
+    def checkpoint(partial):
+        # written after every question, so an interrupted (paid) run can continue with --resume-from <this file>
+        js.write_text(json.dumps({"set": name, "model": model, "fake": fake, "build": ctx.serving.build, "partial": partial,
+                                  "summary": summarise(results), "results": results}, indent=2, default=str))
     results = []
     asked = 0
     for q in questions:
@@ -172,17 +181,14 @@ def run_set(name, limit=None, fake=False, delay=0.0, questions_dir=None, synthet
         asked += 1
         r = run_question(q, ctx, llm, fake)
         results.append(r)
+        if not fake:
+            checkpoint(partial=True)
         if not quiet:
             mark = "skip" if r.get("skipped") else "manual" if r["passed"] is None else "pass" if r["passed"] else "FAIL"
             print(f"  [{name}] {r['id']:<6} {mark:<6} {r['detail'][:100]}", flush=True)
     summary = summarise(results)
-    out_dir = Path(out_dir) if out_dir else config.settings().out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
-    md, js = out_dir / f"eval_{name}_{stamp}.md", out_dir / f"eval_{name}_{stamp}.json"
     md.write_text(to_markdown(name, results, summary, model, fake, ctx.serving.build))
-    js.write_text(json.dumps({"set": name, "model": model, "fake": fake, "build": ctx.serving.build, "summary": summary,
-                              "results": results}, indent=2, default=str))
+    checkpoint(partial=False)
     answers_csv = None
     if name.startswith("benchmark") and not fake:
         from c360.layer2.eval import submission

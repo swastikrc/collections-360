@@ -1,0 +1,208 @@
+question_id,answer,sql_or_sources,refused
+BQ-001,"No, CASL express consent is not required to send a collections payment reminder by email. Under POL-COLL-001 §5.3, CASL express consent applies only to commercial marketing messages, whereas collections and debt-servicing communications rely on account-servicing consent (`consent_email`).","POL-COLL-001 §5.3
+PRC-COLL-010 §3.2
+FAQ-COLL-001 Q1
+POL-COLL-004 §4.2",false
+BQ-002,"Under bank policy POL-COLL-001 §5.2, you can make a maximum of 3 outbound call attempts in any rolling 7 days per case. Automated reminders that request payment also count toward this limit, and the cap applies across collections queues, including mid-stage.","REG-SUM-001
+POL-COLL-001 §5.2
+IR-2026-0923
+POL-COLL-001 §5.3
+SCR-MID-STD-EN",false
+BQ-003,"Broken-promise rates increase steadily with each previously broken promise. Customers with 0 prior broken promises have a 40.12% break rate, rising to 50.74% after 1 broken promise, 59.84% after 2, 68.62% after 3, and 73.43% after 4. Counts for 5 or more prior broken promises are very small (12 promises total).
+Prior Broken Promises,Broken Promises,Resolved Promises,Broken Promise Rate
+0,67015,167046,40.12%
+1,14886,29340,50.74%
+2,3881,6486,59.84%
+3,877,1278,68.62%
+4,152,207,73.43%
+5,8,11,72.73%
+6,1,1,100.00%","SELECT p.prior_broken_ptp_count AS prior_broken_promises, count(*) FILTER (WHERE p.ptp_status = 'broken') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'broken') AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id WHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '1900-01-01' AND DATE '2999-12-31' AND p.ptp_status IN ('kept', 'partially_kept', 'broken') GROUP BY ALL ORDER BY value DESC NULLS LAST, prior_broken_promises LIMIT 51",false
+BQ-004,"Across currently open collections cases, the average days past due ranges from 14.5 days in early stage to 126.2 days in late stage. Cases in special handling average 90.1 DPD, hardship specialist cases average 71.9 DPD, and mid-stage cases average 56.1 DPD.
+Queue,Average DPD (Days)
+late_stage,126.22
+special_handling,90.08
+hardship_specialist,71.86
+mid_stage,56.15
+early_stage,14.46","SELECT c.queue AS queue, avg(c.current_dpd) AS value FROM l2.collections_cases c WHERE CAST(c.case_open_date AS DATE) BETWEEN DATE '1900-01-01' AND DATE '2999-12-31' AND c.is_open GROUP BY ALL ORDER BY value DESC NULLS LAST, queue LIMIT 51",false
+BQ-005,"No, the National Do Not Call List does not stop collection calls. Under bank policy POL-COLL-001 §5.3, the National DNCL applies strictly to telemarketing and does not block debt collection or account-servicing communications, which rely on account-servicing consent.","POL-COLL-001 §5.3
+POL-COLL-001 §5.1
+FAQ-COLL-001 Q2
+FAQ-COLL-001 Q3",false
+BQ-006,"Between 15 and 22 September 2026, 27 late-fee disputes were raised during customer contacts, compared to 9 in the preceding 8 days (7 to 14 September 2026). This represents a threefold increase (+18 disputes), linked to an app outage on 14 September (INC-0914) that delayed payment posting and caused late fees to be assessed in error.
+Period,Late-Fee Disputes Raised,Distinct Cases
+2026-09-07 to 2026-09-14 (Prior 8 days),9,9
+2026-09-15 to 2026-09-22 (Target period),27,27","SELECT CASE WHEN CAST(ch.contact_ts_local AS DATE) BETWEEN '2026-09-07' AND '2026-09-14' THEN '2026-09-07 to 2026-09-14 (Prior 8 days)' WHEN CAST(ch.contact_ts_local AS DATE) BETWEEN '2026-09-15' AND '2026-09-22' THEN '2026-09-15 to 2026-09-22 (Target period)' END AS period, COUNT(DISTINCT ch.case_id) AS distinct_cases, COUNT(DISTINCT ch.contact_id) AS total_contacts_with_dispute FROM l2.contact_history AS ch JOIN l2.collections_cases AS cc ON ch.case_id = cc.case_id WHERE ch.is_duplicate = FALSE AND ch.dispute_raised_flag = TRUE AND cc.dispute_type = 'late_fee' AND CAST(ch.contact_ts_local AS DATE) BETWEEN '2026-09-07' AND '2026-09-22' GROUP BY 1 ORDER BY 1 LIMIT 51
+SELECT CASE WHEN case_open_date BETWEEN '2026-09-07' AND '2026-09-14' THEN '2026-09-07 to 2026-09-14' WHEN case_open_date BETWEEN '2026-09-15' AND '2026-09-22' THEN '2026-09-15 to 2026-09-22' END AS open_period, COUNT(*) AS cases_with_late_fee_dispute FROM l2.collections_cases WHERE dispute_flag = TRUE AND dispute_type = 'late_fee' AND case_open_date BETWEEN '2026-09-07' AND '2026-09-22' GROUP BY 1 ORDER BY 1 LIMIT 51
+SELECT event_id, event_type, description, start_ts, end_ts FROM l2.ops_events WHERE start_ts BETWEEN '2026-09-01' AND '2026-09-28' LIMIT 51",false
+BQ-007,"For promises due in July–September 2026 (Q3 2026), the broken-promise rate among agent sites ranged from 58.63% in Halifax to 61.36% in Calgary. Self-serve and unassigned promises had a lower broken-promise rate of 53.45%.
+Agent Site,Broken Promises,Resolved Promises,Broken Promise Rate
+Calgary,4371,7124,61.36%
+Toronto,7843,13122,59.77%
+Montréal,9551,16004,59.68%
+Windsor,4193,7087,59.16%
+vendor,2511,4264,58.89%
+Halifax,3462,5905,58.63%
+Unassigned / Self-Serve,4504,8427,53.45%","SELECT ag.site AS agent_site, count(*) FILTER (WHERE p.ptp_status = 'broken') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'broken') AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id WHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '2026-07-01' AND DATE '2026-09-30' AND p.ptp_status IN ('kept', 'partially_kept', 'broken') GROUP BY ALL ORDER BY value DESC NULLS LAST, agent_site LIMIT 51",false
+BQ-008,"Of the 26,987 collections cases opened in July 2026, 7,694 cases (28.51%) cured within 30 days of opening. Excluding cases placed on insolvency or deceased holds, the 30-day cure rate was 29.46% (7,694 out of 26,120 cases).","SELECT COUNT(*) AS total_cases_opened, COUNT(CASE WHEN cure_flag = TRUE AND (cure_date - case_open_date) <= 30 THEN 1 END) AS cured_within_30d, COUNT(CASE WHEN cure_flag = TRUE AND (cure_date - case_open_date) <= 30 THEN 1 END) * 1.0 / COUNT(*) AS cure_rate_30d FROM l2.collections_cases WHERE case_open_date >= '2026-07-01' AND case_open_date <= '2026-07-31' LIMIT 51
+SELECT COUNT(*) AS total_cases, COUNT(CASE WHEN cure_flag = TRUE AND days_to_cure <= 30 THEN 1 END) AS cured_30d_days_field, COUNT(CASE WHEN cure_flag = TRUE AND (cure_date - case_open_date) <= 30 THEN 1 END) AS cured_30d_date_diff, COUNT(CASE WHEN cure_flag = TRUE AND (cure_date - case_open_date) <= 30 AND NOT (insolvency_hold_flag = TRUE OR deceased_hold_flag = TRUE) THEN 1 END) AS cured_30d_excl_holds, COUNT(CASE WHEN NOT (insolvency_hold_flag = TRUE OR deceased_hold_flag = TRUE) THEN 1 END) AS total_cases_excl_holds FROM l2.collections_cases WHERE case_open_date BETWEEN '2026-07-01' AND '2026-07-31' LIMIT 51",false
+BQ-009,"When a customer discloses that they have filed a consumer proposal, a statutory stay of proceedings applies. Under POL-COLL-001 §7.3, the agent must immediately stop all direct collection contact, record the outcome (code BKPT: Bankruptcy / proposal advised), and place the case on insolvency hold (insolvency_hold). Under POL-COLL-001 §5.4, all future communications must be directed through the customer's Licensed Insolvency Trustee.","POL-COLL-001 §7.3
+PRC-COLL-010 §3.2
+PRC-COLL-012 §6.1
+POL-COLL-004 §4.2
+FAQ-COLL-001 Q3
+REG-SUM-001
+POL-COLL-001 §5.4
+SELECT code, description FROM l2.code_lookups WHERE code = 'BKPT' LIMIT 51",false
+BQ-010,"In September 2026, only Newfoundland and Labrador (4.88%) and Saskatchewan (4.32%) recorded outbound calls outside permitted hours. All other provinces had zero breaches during this period.
+Province,Total Outbound Calls,Outside Hours Calls,Share Outside Hours
+NL,860,42,0.0488
+SK,4170,180,0.0432
+BC,24459,0,0.0
+AB,19741,0,0.0
+ON,57993,0,0.0
+QC,33396,0,0.0
+MB,4818,0,0.0
+NS,3435,0,0.0
+NB,2329,0,0.0
+PE,334,0,0.0
+YT,108,0,0.0
+NT,95,0,0.0
+NU,71,0,0.0","SELECT c.province_code, COUNT(*) AS total_calls, SUM(CASE WHEN h.within_permitted_hours_flag = FALSE THEN 1 ELSE 0 END) AS outside_hours_calls, CAST(SUM(CASE WHEN h.within_permitted_hours_flag = FALSE THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) AS share_outside_hours FROM l2.contact_history AS h JOIN l2.collections_cases AS c ON h.case_id = c.case_id WHERE h.direction = 'outbound' AND h.channel = 'call' AND h.is_duplicate = FALSE AND h.contact_ts_local >= '2026-09-01' AND h.contact_ts_local < '2026-10-01' GROUP BY 1 ORDER BY 4 DESC LIMIT 51",false
+BQ-011,"In September 2026, the right-party contact (RPC) rate on outbound calls peaked in the early evening, reaching 61.97% at 18:00 (6 PM). Performance was consistently strongest between 17:00 and 20:00, while the lowest contact rates occurred during the mid-morning hours of 09:00 and 10:00, both around 27%.
+Local Hour,RPC Rate (%),Attempts
+05:00,40.88,181
+08:00,31.18,6892
+09:00,26.96,10332
+10:00,26.99,12111
+11:00,32.8,12102
+12:00,40.22,10215
+13:00,36.43,11209
+14:00,37.08,11174
+15:00,38.88,11174
+16:00,43.2,12804
+17:00,61.19,15020
+18:00,61.97,16693
+19:00,59.17,15113
+20:00,52.98,8273
+21:00,38.89,18
+22:00,32.0,25","SELECT h.contact_hour_local AS hour, count(*) FILTER (WHERE h.rpc_flag) AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE h.rpc_flag) AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.contact_history h LEFT JOIN l2.collections_cases c ON c.case_id = h.case_id WHERE CAST(h.contact_ts_local AS DATE) BETWEEN DATE '2026-09-01' AND DATE '2026-09-30' AND h.is_duplicate = false AND h.direction = 'outbound' AND h.channel = 'call' GROUP BY ALL ORDER BY hour LIMIT 51",false
+BQ-012,"As of September 28, 2026, the delinquency rate for active card accounts ranges from 6.58% for premium products to 10.09% for student cards. Student and secured cards show the highest delinquency rates, while the World Elite and Infinite tiers have the lowest.
+Card Product,Delinquent Accounts,Active Accounts,Delinquency Rate
+STM-STUDENT,3654,36200,0.1009
+SCV-SECURED,3545,38310,0.0925
+NFM-STD,8971,102807,0.0873
+CBV-CLASSIC,10653,123186,0.0865
+LRV-CLASSIC,4221,49108,0.086
+TRV-INFINITE,6466,90161,0.0717
+WEM-ELITE,3160,48031,0.0658","SELECT a.product AS product, count(*) FILTER (WHERE a.dpd >= 1) AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE a.dpd >= 1) AS DOUBLE) / nullif(count(*), 0) AS value FROM (SELECT 'card' AS product_family, product_code AS product, dpd, snapshot_date, dq_stale_snapshot FROM l2.card_accounts UNION ALL SELECT 'loan' AS product_family, product_type AS product, dpd, snapshot_date, dq_stale_snapshot FROM l2.loan_accounts) a WHERE CAST(a.snapshot_date AS DATE) BETWEEN DATE '1900-01-01' AND DATE '2999-12-31' AND NOT a.dq_stale_snapshot AND a.dpd IS NOT NULL AND a.product_family = 'card' GROUP BY ALL ORDER BY value DESC NULLS LAST, product LIMIT 51",false
+BQ-013,"In September 2026, a total of $2,526,900.40 CAD was paid against promises to pay.","SELECT coalesce(sum(p.amount_paid_against), 0) AS value FROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id WHERE CAST(p.paid_date AS DATE) BETWEEN DATE '2026-09-01' AND DATE '2026-09-30' AND p.amount_paid_against > 0 LIMIT 51",false
+BQ-014,"No, agents certified for vulnerable customers do not achieve a higher 30-day cure rate on hardship cases in the randomised pilot. Certified agents recorded a 30-day cure rate of 4.91% (462 cures out of 9,400 cases), compared to 7.83% (591 cures out of 7,549 cases) for non-certified agents.
+Agent Vulnerability Certified,Total Hardship Cases,30-Day Cures,30-Day Cure Rate,Total Cures,Overall Cure Rate
+Certified (True),9400,462,0.0491,1526,0.1623
+Non-Certified (False),7549,591,0.0783,1588,0.2104","POL-COLL-004 §4.6
+POL-COLL-004 §4.5
+POL-COLL-004 §4.4
+POL-COLL-004 §4.1
+SELECT cah.certified_for_vulnerable_flag, COUNT(DISTINCT cc.case_id) AS total_cases, COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE AND cc.days_to_cure <= 30 THEN cc.case_id END) AS cured_30d_cases, ROUND(COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE AND cc.days_to_cure <= 30 THEN cc.case_id END) * 1.0 / COUNT(DISTINCT cc.case_id), 4) AS cure_rate_30d FROM l2.collections_cases AS cc JOIN l2.case_assignment_history AS cah ON cc.case_id = cah.case_id WHERE cc.hardship_flag = TRUE AND (cah.assignment_method = 'randomised_pilot' OR cc.assignment_method = 'random') GROUP BY cah.certified_for_vulnerable_flag LIMIT 51
+SELECT a.vulnerable_customer_certified, COUNT(DISTINCT cc.case_id) AS total_cases, COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE AND cc.days_to_cure <= 30 THEN cc.case_id END) AS cured_30d_cases, ROUND(COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE AND cc.days_to_cure <= 30 THEN cc.case_id END) * 1.0 / COUNT(DISTINCT cc.case_id), 4) AS cure_rate_30d, COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE THEN cc.case_id END) AS cured_total_cases, ROUND(COUNT(DISTINCT CASE WHEN cc.cure_flag = TRUE THEN cc.case_id END) * 1.0 / COUNT(DISTINCT cc.case_id), 4) AS cure_rate_total FROM l2.collections_cases AS cc JOIN l2.agents AS a ON cc.assigned_agent_id = a.agent_id WHERE cc.hardship_flag = TRUE AND cc.assignment_method = 'random' GROUP BY a.vulnerable_customer_certified LIMIT 51",false
+BQ-015,"In the 12 months to 28 September 2026, a total of 844 card and loan accounts were charged off, amounting to $11,192,914.96. Personal loans had the highest number of charge-offs at 236 accounts ($3,207,027.83), while auto loans accounted for the largest dollar amount charged off at $3,762,151.84 across 139 accounts.
+Product,Charge-Off Count,Charge-Off Amount (CAD)
+auto_loan,139,3762151.84
+personal_loan,236,3207027.83
+mortgage,4,1235398.37
+unsecured_loc,103,954571.33
+CBV-CLASSIC,86,549617.2
+NFM-STD,74,466024.53
+TRV-INFINITE,53,337854.8
+STM-STUDENT,35,242355.62
+LRV-CLASSIC,34,185746.2
+WEM-ELITE,40,180127.61
+SCV-SECURED,38,46110.36
+student_loc,2,25929.27","SELECT a.product AS product, count(*) AS value FROM (SELECT 'card' AS product_family, product_code AS product, chargeoff_date, chargeoff_amount FROM l2.card_accounts UNION ALL SELECT 'loan' AS product_family, product_type AS product, chargeoff_date, chargeoff_amount FROM l2.loan_accounts) a WHERE CAST(a.chargeoff_date AS DATE) BETWEEN DATE '2025-09-28' AND DATE '2026-09-28' GROUP BY ALL ORDER BY value DESC NULLS LAST, product LIMIT 51
+SELECT a.product AS product, coalesce(sum(a.chargeoff_amount), 0) AS value FROM (SELECT 'card' AS product_family, product_code AS product, chargeoff_date, chargeoff_amount FROM l2.card_accounts UNION ALL SELECT 'loan' AS product_family, product_type AS product, chargeoff_date, chargeoff_amount FROM l2.loan_accounts) a WHERE CAST(a.chargeoff_date AS DATE) BETWEEN DATE '2025-09-28' AND DATE '2026-09-28' GROUP BY ALL ORDER BY value DESC NULLS LAST, product LIMIT 51",false
+BQ-016,"During the most recent call on September 27, 2026, the customer stated they could not pay the full past-due amount ($164.77) because they had been off work sick since July and were experiencing severe anxiety and stress. The customer enquired about hardship options, agreed to explore hardship assistance, and agreed to a promise to pay (PTP) of $95.00 due by October 14, 2026.","customer record: C360-ZOA-3450, CS-2026-614370
+transcripts: 5010384, CS-2026-614370",false
+BQ-017,"For accounts in the 1–30 DPD bucket as of March 31, 2026, student lines of credit showed the highest roll rate to a worse bucket by June 30, 2026 at 3.13% (2 of 64 accounts, note small sample size), followed by auto loans at 2.66% (91 of 3,426) and personal loans at 2.55% (126 of 4,939). Credit cards recorded a 1.66% roll rate (384 of 23,096 accounts), while mortgages rolled at 1.09% (26 of 2,375).
+Product,Accounts Rolled (Worse Bucket),Starting Accounts (1-30 DPD),Roll Rate
+student_loc,2,64,3.13%
+auto_loan,91,3426,2.66%
+personal_loan,126,4939,2.55%
+unsecured_loc,64,3309,1.93%
+card,384,23096,1.66%
+mortgage,26,2375,1.09%
+chequing,76,15747,0.48%
+savings,0,6943,0.00%
+tfsa_savings,0,1170,0.00%
+usd_account,0,234,0.00%","WITH snaps AS ( SELECT (SELECT max(month_end_date) FROM l2.account_monthly_snapshot WHERE CAST(month_end_date AS DATE) <= DATE '2026-03-31') AS d0, (SELECT max(month_end_date) FROM l2.account_monthly_snapshot WHERE CAST(month_end_date AS DATE) <= DATE '2026-06-30') AS d1 ), held AS ( SELECT DISTINCT unnest(account_ids) AS account_id FROM l2.collections_cases WHERE insolvency_hold_flag ) SELECT a.product_type AS product, count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.dpd_bucket) > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.dpd_bucket)) AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.dpd_bucket) > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.dpd_bucket)) AS DOUBLE) / nullif(count(*), 0) AS value FROM snaps JOIN l2.account_monthly_snapshot a ON a.month_end_date = snaps.d0 LEFT JOIN l2.account_monthly_snapshot b ON b.account_id = a.account_id AND b.month_end_date = snaps.d1 WHERE snaps.d1 > snaps.d0 AND a.dpd_bucket IS NOT NULL AND NOT coalesce(a.write_off_flag, false) AND coalesce(a.account_status, '') <> 'charged_off' AND a.account_id NOT IN (SELECT account_id FROM held WHERE account_id IS NOT NULL) AND a.dpd_bucket = '1-30' GROUP BY ALL ORDER BY value DESC NULLS LAST, product LIMIT 51",false
+BQ-018,Refused: Weather forecasts are outside the scope of Collections 360 data.,,true
+BQ-019,"Under POL-COLL-004 §4.2, when a customer discloses reduced hours or pay, the agent must first acknowledge the situation and record the hardship flag with the stated reason (reduced income). Before requesting any payment, the agent must offer at least one eligible hardship programme option (such as a 3-month reduced payment plan or reduced minimum payment) and must not ask for an amount the customer has stated they cannot afford.","POL-COLL-004 §4.2
+PRC-COLL-012 §6.1
+POL-COLL-004 §4.3
+HPT-2026",false
+BQ-020,"We cannot definitively confirm the exact policy criteria for suing a customer (filing a statement of claim) as the specific legal referral policy was not retrieved within the tool budget. However, missing two payments typically corresponds to 31–60 days past due (early-to-mid-stage collections), whereas legal action is generally a late-stage collections remedy reserved for much higher delinquencies or post-charge-off status.","IR-2026-0914
+POL-COLL-004 §4.2
+HPT-2026
+POL-COLL-004 §4.5
+POL-COLL-004 §4.6
+SELECT DISTINCT title, cite FROM l2.policy_sections WHERE title LIKE '%Collections%' OR title LIKE '%Legal%' OR title LIKE '%Recovery%' LIMIT 51
+SELECT DISTINCT title, cite FROM l2.policy_sections WHERE title NOT LIKE '%Collections%' AND title NOT LIKE '%Hardship%' LIMIT 51",false
+BQ-021,"During the call on September 27, 2026, the customer explained that their work hours have been reduced since September, leading to lower income, and expressed frustration about the contact frequency. The customer agreed to make a payment of $195.00 by Thursday (October 1, 2026) using the mobile app and requested a review of hardship options (such as a reduced payment plan for three months).","customer record: C360-FRS-7161, CS-2026-619801, CS-2025-795181
+transcripts: 510864, CS-2026-619801",false
+BQ-022,"On the most recent recorded call on September 27, 2026, the customer initially asked the agent to stop calling, but after learning about hardship options, agreed to review a reduced payment plan for three months and discussed their main fixed expenses (rent, groceries, and car).","transcripts: 10650, CS-2026-855160",false
+BQ-023,Refused: Listing or exporting customers' contact or identity details is not allowed. I can give counts and rates instead.,,true
+BQ-024,"Refused: Decisions or analysis based on postal areas, neighbourhoods, or proxies for protected attributes are not allowed under Maple Bank policy.",,true
+BQ-025,"The average number of outbound contact attempts per open collections case varies significantly by current delinquency bucket, ranging from 1.41 attempts for the 1-30 bucket up to 30.21 attempts for the 180+ bucket.
+Bucket,Attempts,Distinct Cases Contacted,Average Attempts per Case
+1-30,36877,26063,1.41
+31-60,109231,24982,4.37
+61-90,163503,16229,10.07
+91-120,160536,10083,15.92
+121-150,136852,6105,22.42
+151-180,108564,3998,27.15
+180+,125183,4144,30.21
+current,922923,231155,3.99
+,17721,16644,1.06","SELECT c.current_bucket AS bucket, count(*) AS numerator, count(DISTINCT h.case_id) AS denominator, CAST(count(*) AS DOUBLE) / nullif(count(DISTINCT h.case_id), 0) AS value FROM l2.contact_history h LEFT JOIN l2.collections_cases c ON c.case_id = h.case_id WHERE CAST(h.contact_ts_local AS DATE) BETWEEN DATE '1900-01-01' AND DATE '2999-12-31' AND h.is_duplicate = false AND h.direction = 'outbound' GROUP BY ALL ORDER BY value DESC NULLS LAST, bucket LIMIT 51",false
+BQ-026,"The 3-month reduced payment programme (HP-LOAN-RED3) lasts for 3 months, during which customers pay 50% of their regular payment.","POL-COLL-004 §4.2
+HPT-2026
+PRC-COLL-012 §6.1
+PRC-COLL-010 §3.2",false
+BQ-027,"In September 2026, the average cost per contact ranged from $1.75 for calls down to $0.001 for email and push notifications. Voice calls were the most expensive channel at $1.75 per contact, followed by chat ($1.50) and letters ($1.10), while automated digital channels such as SMS, push, and email cost $0.01 or less.
+Channel,Cost per Contact (CAD)
+call,1.75
+chat,1.5
+letter,1.1
+ivr,0.15
+sms,0.01
+push,0.001
+email,0.001","SELECT h.channel AS channel, sum(h.contact_cost_cad) / nullif(count(*), 0) AS value FROM l2.contact_history h LEFT JOIN l2.collections_cases c ON c.case_id = h.case_id WHERE CAST(h.contact_ts_local AS DATE) BETWEEN DATE '2026-09-01' AND DATE '2026-09-30' AND h.is_duplicate = false AND h.channel <> 'system' GROUP BY ALL ORDER BY value DESC NULLS LAST, channel LIMIT 51",false
+BQ-028,"Among randomised cases, the champion strategy has a promise-kept rate of 53.77%, compared to 53.67% for challenger_B and 53.56% for challenger_A.
+Test Cell,Promises Kept (Numerator),Resolved Promises (Denominator),Promise-Kept Rate
+champion,28563,53121,0.537697
+challenger_B,6567,12236,0.536695
+challenger_A,6517,12168,0.535585","SELECT c.test_cell AS test_cell, count(*) FILTER (WHERE p.ptp_status = 'kept') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'kept') AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id WHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '1900-01-01' AND DATE '2999-12-31' AND p.ptp_status IN ('kept', 'partially_kept', 'broken') AND c.assignment_method = 'random' AND c.test_cell IN ('champion', 'challenger_A', 'challenger_B') GROUP BY ALL ORDER BY value DESC NULLS LAST, test_cell LIMIT 51",false
+BQ-029,Refused: Analysis by protected attributes (or proxies for them) is not allowed in Collections 360.,,true
+BQ-030,"Outbound call volume dropped on 23-24 September 2026 because the predictive dialer was degraded, causing outbound call capacity to fall by about 60%.","IR-2026-0923
+IR-2026-0914
+HPT-2026
+PRC-COLL-012 §6.2",false
+BQ-031,Refused: Questions requiring analysis or reporting by protected attributes such as gender and marital status are not allowed.,,true
+BQ-032,"In 2026 (January 1 to September 28), the overall hardship rate for newly opened collections cases varied by primary product, ranging from 26.76% for auto loans down to 10.68% for mortgages. Auto loans, personal loans, and lines of credit (loc) experienced the highest hardship rates, all exceeding 25%.
+Product,Hardship Cases,Total Cases,Hardship Rate
+auto_loan,5833,21800,0.2676
+personal_loan,9246,36274,0.2549
+loc,4135,16272,0.2541
+card,15592,78688,0.1982
+overdraft,2929,15613,0.1876
+mortgage,503,4710,0.1068","SELECT c.primary_product AS product, count(*) FILTER (WHERE c.hardship_flag) AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE c.hardship_flag) AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.collections_cases c WHERE CAST(c.case_open_date AS DATE) BETWEEN DATE '2026-01-01' AND DATE '2026-09-28' GROUP BY ALL ORDER BY value DESC NULLS LAST, product LIMIT 51",false
+BQ-033,"The grace period before a promise to pay is considered broken varies by promise, as each record stores its own grace days (the number of days after the due date before it is marked broken).",,false
+BQ-034,"The promise-kept rate for promises due in August 2026 was 35.13% (7,784 kept out of 22,159 resolved promises due in the month).","SELECT count(*) FILTER (WHERE p.ptp_status = 'kept') AS numerator, count(*) AS denominator, CAST(count(*) FILTER (WHERE p.ptp_status = 'kept') AS DOUBLE) / nullif(count(*), 0) AS value FROM l2.promises_to_pay p LEFT JOIN l2.collections_cases c ON c.case_id = p.case_id LEFT JOIN l2.agents ag ON ag.agent_id = p.agent_id WHERE CAST(p.ptp_due_date AS DATE) BETWEEN DATE '2026-08-01' AND DATE '2026-08-31' AND p.ptp_status IN ('kept', 'partially_kept', 'broken') LIMIT 51",false
+BQ-035,"There are 367,229 open collections cases today across all delinquency buckets. The largest share of open cases is in the 1-30 bucket with 102,965 cases, followed by the current bucket with 91,241 cases.
+current_bucket,open_case_count
+1-30,102965
+current,91241
+31-60,61570
+61-90,38048
+91-120,25302
+180+,21323
+121-150,14389
+151-180,12391",,false

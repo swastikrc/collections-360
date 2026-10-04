@@ -1,6 +1,6 @@
 {
   "source_db": "/home/swastikroychowdhury/Documents/cibc/warehouse/c360.duckdb",
-  "generated": "2026-10-04 15:31:55",
+  "generated": "2026-10-04 19:45:57",
   "errors": 0,
   "warnings": 0,
   "items": [
@@ -338,7 +338,7 @@
       "level": "INFO",
       "check": "views",
       "subject": "l2.contact_history",
-      "message": "binds (51 columns)"
+      "message": "binds (56 columns)"
     },
     {
       "level": "INFO",
@@ -500,7 +500,7 @@
       "level": "INFO",
       "check": "unexpected",
       "subject": "curated.contact_history",
-      "message": "columns not mentioned anywhere (decide whether to allow-list): agent_coded_sentiment, agent_identified_self_flag, agent_tenure_band_at_contact, amd_result, answer_rate_prior_30d, app_payment_after_contact_flag, app_session_after_contact_flag, attempt_number_day, batch_id, broken_ptp_count_at_contact, call_recording_id, callback_ts, campaign_id, chat_message_count, chat_session_id, contacts_prior_7d, customer_time_zone, days_since_case_open_at_contact, device_type, dialer_mode, disclosure_version, email_bounce_type, email_clicked_flag, email_client, email_delivered_flag, email_open_ts, email_opened_flag, email_subject (deny-listed), email_unsubscribe_flag, extract_ts, hold_duration_sec, interpreter_used_flag, ivr_path, ivr_self_serve_payment_flag, language_used, letter_mailed_date, letter_returned_flag, link_click_ts, link_clicked_flag, link_expiry_ts, link_payment_flag, message_language, minutes_since_prev_contact, open_ptp_at_contact_flag, outcome_desc, overdue_at_contact, payment_link_id, phone_number_hash (deny-listed), phone_type_dialled (deny-listed), push_delivered_flag, push_opened_flag, push_template_id, qa_reviewer_id, qa_score, qa_selected_flag, queue_wait_sec, record_hash, recording_notice_read_flag, recording_retention_until, ring_duration_sec, rpc_count_prior_30d, script_id, sms_delivered_flag, sms_delivered_ts, sms_opt_out_flag, sms_reply_flag, sms_reply_text (deny-listed), sms_segment_count, sms_text (deny-listed), src_file_name, src_system, sub_outcome_code, third_party_contact_flag, transfer_target, treatment_code, vendor_id, voice_sample_id, vulnerability_disclosed_flag (deny-listed), wrap_duration_sec"
+      "message": "columns not mentioned anywhere (decide whether to allow-list): agent_coded_sentiment, agent_identified_self_flag, agent_tenure_band_at_contact, amd_result, answer_rate_prior_30d, app_payment_after_contact_flag, app_session_after_contact_flag, attempt_number_day, batch_id, broken_ptp_count_at_contact, call_recording_id, callback_ts, campaign_id, chat_message_count, chat_session_id, contacts_prior_7d, customer_time_zone, days_since_case_open_at_contact, device_type, dialer_mode, disclosure_version, email_bounce_type, email_clicked_flag, email_client, email_delivered_flag, email_open_ts, email_opened_flag, email_subject (deny-listed), email_unsubscribe_flag, extract_ts, hold_duration_sec, interpreter_used_flag, ivr_path, ivr_self_serve_payment_flag, language_used, letter_mailed_date, letter_returned_flag, link_expiry_ts, message_language, minutes_since_prev_contact, open_ptp_at_contact_flag, outcome_desc, overdue_at_contact, phone_number_hash (deny-listed), phone_type_dialled (deny-listed), push_delivered_flag, push_opened_flag, push_template_id, qa_reviewer_id, qa_score, qa_selected_flag, queue_wait_sec, record_hash, recording_notice_read_flag, recording_retention_until, ring_duration_sec, rpc_count_prior_30d, script_id, sms_delivered_ts, sms_opt_out_flag, sms_reply_flag, sms_reply_text (deny-listed), sms_segment_count, sms_text (deny-listed), src_file_name, src_system, sub_outcome_code, third_party_contact_flag, transfer_target, treatment_code, vendor_id, voice_sample_id, vulnerability_disclosed_flag (deny-listed), wrap_duration_sec"
     },
     {
       "level": "INFO",

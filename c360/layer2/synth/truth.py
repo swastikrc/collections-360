@@ -148,7 +148,7 @@ class Truth:
     # ---- roll rate -----------------------------------------------------------------------------
     def roll_rate(self, start, end, by=None, where=None):
         """Official: accounts in a bucket at the snapshot on/before `start` that are in a worse bucket at
-        the snapshot on/before `end`. Stored buckets; charged-off accounts and accounts in a case on
+        the snapshot on/before `end`. Buckets from dpd; charged-off accounts and accounts in a case on
         insolvency hold are left out; accounts missing at the end count as not rolled."""
         s = self.f["account_monthly_snapshot"].copy()
         s["d"] = _day(s["month_end_date"])
@@ -160,6 +160,9 @@ class Truth:
         cases = self.f["collections_cases"]
         for ids in cases.loc[cases["insolvency_hold_flag"].fillna(False).astype(bool), "account_ids"]:
             held.update(list(ids) if ids is not None else [])
+        # buckets are worked out from days past due (the stored bucket disagrees with dpd in some snapshot rows)
+        edges = [(0, "current"), (30, "1-30"), (60, "31-60"), (90, "61-90"), (120, "91-120"), (150, "121-150"), (180, "151-180")]
+        s["dpd_bucket"] = s["dpd"].map(lambda v: None if pd.isna(v) else next((name for top, name in edges if v <= top), "180+"))
         a = s[(s["d"] == d0) & s["dpd_bucket"].notna() & ~s["write_off_flag"].fillna(False).astype(bool)
               & (s["account_status"].fillna("") != "charged_off") & ~s["account_id"].isin(held)]
         b = s.loc[s["d"] == d1, ["account_id", "dpd_bucket"]].rename(columns={"dpd_bucket": "next_bucket"})

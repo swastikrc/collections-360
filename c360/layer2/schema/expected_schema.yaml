@@ -398,6 +398,11 @@ curated:
     confidence: confirmed
     grain: one row per contact attempt or inbound contact
     confirmed:
+      sms_delivered_flag: bool
+      payment_link_id: string
+      link_clicked_flag: bool
+      link_click_ts: timestamp
+      link_payment_flag: bool
       source_platform: string
       sub_channel: string
       strategy_code: string

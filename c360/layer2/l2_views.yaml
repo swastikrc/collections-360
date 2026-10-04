@@ -456,6 +456,11 @@ contact_history:
     dpd_at_contact: {expr: h.dpd_at_contact, optional: true}
     bucket_at_contact: {expr: h.bucket_at_contact, optional: true}
     agent_site: {expr: h.agent_site, optional: true}
+    sms_delivered_flag: {expr: h.sms_delivered_flag, optional: true}
+    payment_link_id: {expr: h.payment_link_id, optional: true}
+    link_clicked_flag: {expr: h.link_clicked_flag, optional: true}
+    link_click_ts: {expr: h.link_click_ts, optional: true}
+    link_payment_flag: {expr: h.link_payment_flag, optional: true}
     contact_id: h.contact_id
     case_id: h.case_id
     account_id: h.account_id

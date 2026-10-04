@@ -46,7 +46,7 @@ promise_kept_rate:
     test_cell: c.test_cell
     assignment_method: c.assignment_method
     agent_site: ag.site
-    prior_broken_promises: {expr: p.prior_broken_ptp_count, type: int}
+    prior_broken_promises: {expr: "least(p.prior_broken_ptp_count, 3)", type: int}   # 3 = 3 or more (4+ are under 0.2% of promises)
     ptp_type: p.ptp_type
     month: "strftime(p.ptp_due_date, '%Y-%m')"
   notes: Promises taken with no agent (portal, IVR, SMS) have no agent site (null group).
@@ -101,7 +101,7 @@ cure_rate:
 
 roll_rate:
   label: Roll rate
-  description: Share of accounts in a delinquency bucket at the snapshot on or before the start of the period that are in a worse bucket at the snapshot on or before the end of the period. Stored buckets. Charged-off accounts and accounts in a case on insolvency hold are left out. Snapshots exist at quarter-ends only (Mar 31, Jun 30, Sep 30, Dec 31). Filter from_bucket for the roll rate out of one bucket.
+  description: Share of accounts in a delinquency bucket at the snapshot on or before the start of the period that are in a worse bucket at the snapshot on or before the end of the period. Buckets are worked out from days past due (dpd), because in the snapshot table about 4% of stored buckets disagree with dpd, and most rows stored as 1-30 have dpd 0, which would dilute the rate. Charged-off accounts and accounts in a case on insolvency hold are left out. Snapshots exist at quarter-ends only (Mar 31, Jun 30, Sep 30, Dec 31). Filter from_bucket for the roll rate out of one bucket.
   status: verified
   defined_in: metric_definitions:roll_rate
   aliases: [flow rate, roll forward, deterioration]
@@ -115,25 +115,32 @@ roll_rate:
     ),
     held AS (
       SELECT DISTINCT unnest(account_ids) AS account_id FROM l2.collections_cases WHERE insolvency_hold_flag
+    ),
+    snap AS (
+      SELECT account_id, month_end_date, product_type, account_status, write_off_flag,
+             CASE WHEN dpd IS NULL THEN NULL WHEN dpd <= 0 THEN 'current' WHEN dpd <= 30 THEN '1-30' WHEN dpd <= 60 THEN '31-60'
+                  WHEN dpd <= 90 THEN '61-90' WHEN dpd <= 120 THEN '91-120' WHEN dpd <= 150 THEN '121-150'
+                  WHEN dpd <= 180 THEN '151-180' ELSE '180+' END AS bucket
+      FROM l2.account_monthly_snapshot
     )
     SELECT {dims}
-           count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.dpd_bucket)
-                                > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.dpd_bucket)) AS numerator,
+           count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.bucket)
+                                > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.bucket)) AS numerator,
            count(*) AS denominator,
-           CAST(count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.dpd_bucket)
-                                     > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.dpd_bucket)) AS DOUBLE)
+           CAST(count(*) FILTER (WHERE list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], b.bucket)
+                                     > list_position(['current', '1-30', '31-60', '61-90', '91-120', '121-150', '151-180', '180+'], a.bucket)) AS DOUBLE)
              / nullif(count(*), 0) AS value
     FROM snaps
-    JOIN l2.account_monthly_snapshot a ON a.month_end_date = snaps.d0
-    LEFT JOIN l2.account_monthly_snapshot b ON b.account_id = a.account_id AND b.month_end_date = snaps.d1
+    JOIN snap a ON a.month_end_date = snaps.d0
+    LEFT JOIN snap b ON b.account_id = a.account_id AND b.month_end_date = snaps.d1
     WHERE snaps.d1 > snaps.d0
-      AND a.dpd_bucket IS NOT NULL
+      AND a.bucket IS NOT NULL
       AND NOT coalesce(a.write_off_flag, false)
       AND coalesce(a.account_status, '') <> 'charged_off'
       AND a.account_id NOT IN (SELECT account_id FROM held WHERE account_id IS NOT NULL){filters}
     {group_by}
   dimensions:
-    from_bucket: a.dpd_bucket
+    from_bucket: a.bucket
     product: a.product_type
     product_family: "CASE WHEN a.account_id LIKE 'C-%' THEN 'card' WHEN a.account_id LIKE 'L-%' THEN 'loan' ELSE 'deposit' END"
   notes: "Accounts in a bucket at the start that have no row at the end count in the denominator and not as rolled (official formula: count(worse at end) / count(in bucket at start)). The official time basis is month-end to month-end; the data has quarter-end snapshots, so a period inside one quarter has no start-to-end pair and returns nothing."
